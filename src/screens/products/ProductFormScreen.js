@@ -8,6 +8,8 @@ import {
   Image,
   Modal,
   Pressable,
+  Alert,
+  Dimensions,
 } from "react-native"
 import {
   Text,
@@ -17,15 +19,27 @@ import {
   Chip,
   Menu,
   IconButton,
+  Divider,
+  RadioButton,
+  Portal,
 } from "react-native-paper"
+import * as ImagePicker from 'expo-image-picker'
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import Toast from "react-native-toast-message"
-
 import { productsAPI, categoriesAPI } from "../../services/api"
-import { pickImage } from "../../services/imageService"
-import ImagePickerModal from "../../components/ImagePickerModal"
-import ImageCropModal from "../../components/ImageCropModal"
 import { useLoading } from "../../context/LoadingContext"
 import { shadows, spacing, theme } from "../../theme/theme"
+
+const { width: screenWidth } = Dimensions.get('window')
+
+// Aspect ratio presets for product images
+const ASPECT_RATIOS = [
+  { label: 'Square (1:1)', value: '1:1', ratio: [1, 1], description: 'Perfect for social media' },
+  { label: 'Standard (4:3)', value: '4:3', ratio: [4, 3], description: 'Classic product photos' },
+  { label: 'Wide (16:9)', value: '16:9', ratio: [16, 9], description: 'Banner style images' },
+  { label: 'Portrait (3:4)', value: '3:4', ratio: [3, 4], description: 'Tall product shots' },
+  { label: 'Custom', value: 'custom', ratio: null, description: 'Free form cropping' },
+]
 
 export default function ProductFormScreen({ navigation, route }) {
   const { product } = route.params || {}
@@ -43,17 +57,21 @@ export default function ProductFormScreen({ navigation, route }) {
 
   const [categories, setCategories] = useState([])
   const [errors, setErrors] = useState({})
-  const [imagePickerVisible, setImagePickerVisible] = useState(false)
-  const [imageCropVisible, setImageCropVisible] = useState(false)
-  const [selectedImage, setSelectedImage] = useState(null)
   const [fullscreenImage, setFullscreenImage] = useState(null)
   const [specInput, setSpecInput] = useState({ key: "", value: "" })
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false)
-
+  
+  // Cropping states
+  const [cropModalVisible, setCropModalVisible] = useState(false)
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState(null)
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState('4:3')
+  const [aspectRatioModalVisible, setAspectRatioModalVisible] = useState(false)
+  
   const { showLoading, hideLoading } = useLoading()
 
   useEffect(() => {
     loadCategories()
+    requestPermissions()
     if (product) {
       setFormData({
         name: product.name || "",
@@ -67,6 +85,14 @@ export default function ProductFormScreen({ navigation, route }) {
     }
   }, [product])
 
+  // Request permissions
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Camera roll permissions are required!')
+    }
+  }
+
   const loadCategories = async () => {
     try {
       const response = await categoriesAPI.getAll()
@@ -75,12 +101,16 @@ export default function ProductFormScreen({ navigation, route }) {
       }
     } catch (err) {
       console.error("Failed to load categories", err)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to load categories"
+      })
     }
   }
 
   const validateForm = () => {
     const newErrors = {}
-
     if (!formData.name.trim()) newErrors.name = "Name is required"
     if (!formData.description.trim()) newErrors.description = "Description is required"
     if (!formData.price.trim() || isNaN(formData.price) || parseFloat(formData.price) <= 0)
@@ -88,41 +118,303 @@ export default function ProductFormScreen({ navigation, route }) {
     if (!formData.category) newErrors.category = "Category is required"
     if (formData.stock && (isNaN(formData.stock) || parseInt(formData.stock) < 0))
       newErrors.stock = "Stock must be a non-negative number"
+    if (formData.images.length === 0) newErrors.images = "At least one image is required"
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleImagePick = async (source) => {
-    try {
-      const image = await pickImage(source)
-      if (image) {
-        setSelectedImage(image)
-        setImageCropVisible(true)
-      }
-    } catch (err) {
-      console.error("Image pick error", err)
-      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
+  // Enhanced image picker with aspect ratio selection
+  const showImagePicker = () => {
+    if (formData.images.length >= 5) {
+      Alert.alert("Limit Reached", "You can add maximum 5 images per product")
+      return
+    }
+
+    Alert.alert(
+      "Add Product Image",
+      "Choose an option",
+      [
+        { text: "Camera", onPress: () => selectAspectRatioAndOpenCamera() },
+        { text: "Gallery", onPress: () => selectAspectRatioAndOpenGallery() },
+        { text: "Cancel", style: "cancel" }
+      ]
+    )
+  }
+
+  const selectAspectRatioAndOpenCamera = () => {
+    setAspectRatioModalVisible(true)
+    // Store the action to perform after aspect ratio selection
+    setSelectedImageForCrop({ action: 'camera' })
+  }
+
+  const selectAspectRatioAndOpenGallery = () => {
+    setAspectRatioModalVisible(true)
+    // Store the action to perform after aspect ratio selection
+    setSelectedImageForCrop({ action: 'gallery' })
+  }
+
+  const handleAspectRatioSelection = () => {
+    setAspectRatioModalVisible(false)
+    
+    if (selectedImageForCrop?.action === 'camera') {
+      openCamera()
+    } else if (selectedImageForCrop?.action === 'gallery') {
+      openGallery()
     }
   }
 
-  const handleImageCrop = async (croppedImage) => {
-    if (!croppedImage?.uri) return
+  const openCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera permission is required!')
+        return
+      }
 
-    setFormData((prev) => ({
-      ...prev,
-      images: [...prev.images, { uri: croppedImage.uri }],
-    }))
+      const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
+      
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: selectedRatio?.ratio ? true : false,
+        aspect: selectedRatio?.ratio || [4, 3],
+        quality: 0.9,
+      })
 
-    setSelectedImage(null)
-    setImageCropVisible(false)
+      if (!result.canceled && result.assets[0]) {
+        if (selectedAspectRatio === 'custom') {
+          // Show custom crop modal
+          setSelectedImageForCrop({ ...result.assets[0], needsCrop: true })
+          setCropModalVisible(true)
+        } else {
+          await processImage(result.assets[0])
+        }
+      }
+    } catch (error) {
+      console.error('Camera error:', error)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to capture image",
+      })
+    }
+  }
+
+  const openGallery = async () => {
+    try {
+      const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: selectedRatio?.ratio ? true : false,
+        aspect: selectedRatio?.ratio || [4, 3],
+        quality: 0.9,
+        allowsMultipleSelection: false, // Disable multiple selection when cropping is involved
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        if (selectedAspectRatio === 'custom') {
+          // Show custom crop modal
+          setSelectedImageForCrop({ ...result.assets[0], needsCrop: true })
+          setCropModalVisible(true)
+        } else {
+          await processImage(result.assets[0])
+        }
+      }
+    } catch (error) {
+      console.error('Gallery error:', error)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to select image",
+      })
+    }
+  }
+
+  // Custom crop functionality
+  const handleCustomCrop = async () => {
+    if (!selectedImageForCrop?.uri) return
+
+    try {
+      showLoading("Cropping image...")
+      
+      // For custom cropping, we'll use a square crop as default
+      // You can enhance this with a more sophisticated cropping interface
+      const imageInfo = await manipulateAsync(
+        selectedImageForCrop.uri,
+        [],
+        { format: SaveFormat.JPEG }
+      )
+
+      // Simple center crop to square
+      const size = Math.min(imageInfo.width, imageInfo.height)
+      const originX = (imageInfo.width - size) / 2
+      const originY = (imageInfo.height - size) / 2
+
+      const croppedImage = await manipulateAsync(
+        selectedImageForCrop.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: size,
+              height: size,
+            },
+          },
+        ],
+        {
+          compress: 0.8,
+          format: SaveFormat.JPEG,
+        }
+      )
+
+      await processImage({ uri: croppedImage.uri })
+      setCropModalVisible(false)
+      setSelectedImageForCrop(null)
+
+    } catch (error) {
+      console.error('Crop error:', error)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to crop image",
+      })
+    } finally {
+      hideLoading()
+    }
+  }
+
+  // Process and compress image
+  const processImage = async (imageAsset) => {
+    try {
+      showLoading("Processing image...")
+      
+      // Resize and compress image
+      const manipulatedImage = await manipulateAsync(
+        imageAsset.uri,
+        [
+          { resize: { width: 1000 } }, // Resize to max width of 1000px for products
+        ],
+        {
+          compress: 0.8,
+          format: SaveFormat.JPEG,
+        }
+      )
+
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, { uri: manipulatedImage.uri }]
+      }))
+
+      // Clear image error if exists
+      if (errors.images) {
+        setErrors(prev => ({ ...prev, images: null }))
+      }
+
+      Toast.show({
+        type: "success",
+        text1: "Success",
+        text2: "Image added successfully",
+      })
+
+    } catch (error) {
+      console.error('Image processing error:', error)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to process image",
+      })
+    } finally {
+      hideLoading()
+    }
+  }
+
+  // Re-crop existing image
+  const recropImage = (index) => {
+    Alert.alert(
+      "Re-crop Image",
+      "Choose aspect ratio for re-cropping",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Select Ratio", 
+          onPress: () => {
+            setSelectedImageForCrop({ index, action: 'recrop' })
+            setAspectRatioModalVisible(true)
+          }
+        }
+      ]
+    )
+  }
+
+  const handleRecrop = async () => {
+    setAspectRatioModalVisible(false)
+    
+    if (selectedImageForCrop?.action === 'recrop') {
+      const imageIndex = selectedImageForCrop.index
+      const imageUri = formData.images[imageIndex].uri || formData.images[imageIndex].url
+      
+      try {
+        const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
+        
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: selectedRatio?.ratio || [4, 3],
+          quality: 0.9,
+        })
+
+        if (!result.canceled && result.assets[0]) {
+          const processedImage = await manipulateAsync(
+            result.assets[0].uri,
+            [{ resize: { width: 1000 } }],
+            { compress: 0.8, format: SaveFormat.JPEG }
+          )
+
+          // Replace the image at the specific index
+          setFormData(prev => ({
+            ...prev,
+            images: prev.images.map((img, idx) => 
+              idx === imageIndex ? { uri: processedImage.uri } : img
+            )
+          }))
+
+          Toast.show({
+            type: "success",
+            text1: "Success",
+            text2: "Image re-cropped successfully",
+          })
+        }
+      } catch (error) {
+        console.error('Re-crop error:', error)
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Failed to re-crop image",
+        })
+      }
+    }
   }
 
   const removeImage = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }))
+    Alert.alert(
+      "Remove Image",
+      "Are you sure you want to remove this image?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            setFormData(prev => ({
+              ...prev,
+              images: prev.images.filter((_, i) => i !== index),
+            }))
+          }
+        }
+      ]
+    )
   }
 
   const getCategoryName = (id) => {
@@ -131,30 +423,50 @@ export default function ProductFormScreen({ navigation, route }) {
   }
 
   const addSpecification = () => {
-    if (specInput.key && specInput.value) {
-      setFormData((prev) => ({
+    if (specInput.key.trim() && specInput.value.trim()) {
+      // Check for duplicate keys
+      const existingSpec = formData.specifications.find(spec => 
+        spec.key.toLowerCase() === specInput.key.toLowerCase()
+      )
+      
+      if (existingSpec) {
+        Alert.alert("Duplicate Key", "This specification key already exists")
+        return
+      }
+
+      setFormData(prev => ({
         ...prev,
-        specifications: [...prev.specifications, specInput],
+        specifications: [...prev.specifications, { 
+          key: specInput.key.trim(), 
+          value: specInput.value.trim() 
+        }],
       }))
       setSpecInput({ key: "", value: "" })
     }
   }
 
   const removeSpecification = (index) => {
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       specifications: prev.specifications.filter((_, i) => i !== index),
     }))
   }
 
   const getFileExtension = (uri) => uri.split(".").pop().toLowerCase()
-  const getMimeType = (ext) => ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", bmp: "image/bmp", webp: "image/webp" })[ext] || "image/jpeg"
+  const getMimeType = (ext) => ({
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    webp: "image/webp"
+  })[ext] || "image/jpeg"
 
   const handleSubmit = async () => {
     if (!validateForm()) return
 
     try {
-      showLoading(isEditing ? "Updating..." : "Creating...")
+      showLoading(isEditing ? "Updating product..." : "Creating product...")
       const form = new FormData()
 
       form.append("name", formData.name)
@@ -170,20 +482,29 @@ export default function ProductFormScreen({ navigation, route }) {
           const file = {
             uri: img.uri,
             type: getMimeType(ext),
-            name: `image_${index}.${ext}`,
+            name: `product_image_${index}_${Date.now()}.${ext}`,
           }
           form.append("images", file)
         }
       })
 
-      const response = isEditing ? await productsAPI.update(product._id, form) : await productsAPI.create(form)
+      const response = isEditing 
+        ? await productsAPI.update(product._id, form) 
+        : await productsAPI.create(form)
 
       if (response) {
-        Toast.show({ type: "success", text1: "Success", text2: `Product ${isEditing ? "updated" : "created"} successfully` })
+        Toast.show({
+          type: "success",
+          text1: "Success",
+          text2: `Product ${isEditing ? "updated" : "created"} successfully`
+        })
         navigation.goBack()
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.map(e => e.msg).join(", ") || err.message || "Failed to save product"
+      const msg = err.response?.data?.message ||
+        err.response?.data?.errors?.map(e => e.msg).join(", ") ||
+        err.message ||
+        "Failed to save product"
       Toast.show({ type: "error", text1: "Error", text2: msg })
     } finally {
       hideLoading()
@@ -191,87 +512,360 @@ export default function ProductFormScreen({ navigation, route }) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
         <Card style={styles.card}>
-          <Card.Content>
-            <Text style={styles.title}>{isEditing ? "Edit Product" : "Add Product"}</Text>
+          <Card.Content style={styles.cardContent}>
+            <Text style={styles.title}>
+              {isEditing ? "Edit Product" : "Add New Product"}
+            </Text>
 
-            <Text style={styles.sectionTitle}>Images</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
-              {formData.images.map((img, index) => (
-                <View key={index} style={styles.imageWrapper}>
-                  <Pressable onPress={() => setFullscreenImage(img.uri || img.url)}>
-                    <Image source={{ uri: img.uri || img.url }} style={styles.image} resizeMode="cover" />
-                  </Pressable>
-                  <Button mode="outlined" compact onPress={() => removeImage(index)} style={styles.removeImageButton} labelStyle={{ fontSize: 10 }}>
-                    Remove
-                  </Button>
-                </View>
-              ))}
-            </ScrollView>
-            <Button mode="contained" onPress={() => setImagePickerVisible(true)} icon="camera" style={styles.addImageButton}>
-              Add Image
-            </Button>
+            {/* Enhanced Images Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Product Images *</Text>
+              <Text style={styles.sectionSubtitle}>
+                Add up to 5 high-quality images ({formData.images.length}/5)
+              </Text>
+              
+              {formData.images.length > 0 && (
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  style={styles.imagesContainer}
+                  contentContainerStyle={styles.imagesContentContainer}
+                >
+                  {formData.images.map((img, index) => (
+                    <View key={index} style={styles.imageWrapper}>
+                      <Pressable onPress={() => setFullscreenImage(img.uri || img.url)}>
+                        <Image 
+                          source={{ uri: img.uri || img.url }} 
+                          style={styles.image} 
+                          resizeMode="cover" 
+                        />
+                        {index === 0 && (
+                          <View style={styles.primaryBadge}>
+                            <Text style={styles.primaryBadgeText}>Primary</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                      
+                      <View style={styles.imageActions}>
+                        <IconButton
+                          icon="crop"
+                          size={16}
+                          iconColor={theme.colors.secondary}
+                          style={styles.cropImageIcon}
+                          onPress={() => recropImage(index)}
+                        />
+                        <IconButton
+                          icon="close"
+                          size={16}
+                          iconColor={theme.colors.error}
+                          style={styles.removeImageIcon}
+                          onPress={() => removeImage(index)}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
 
-            <TextInput label="Name *" value={formData.name} onChangeText={(text) => setFormData((prev) => ({ ...prev, name: text }))} style={styles.input} mode="outlined" error={!!errors.name} />
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-
-            <TextInput label="Description *" value={formData.description} onChangeText={(text) => setFormData((prev) => ({ ...prev, description: text }))} style={styles.input} mode="outlined" multiline numberOfLines={4} error={!!errors.description} />
-            {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
-
-            <TextInput label="Price *" value={formData.price} onChangeText={(text) => setFormData((prev) => ({ ...prev, price: text }))} style={styles.input} mode="outlined" keyboardType="numeric" error={!!errors.price} />
-            {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
-
-            <TextInput label="Stock Quantity" value={formData.stock} onChangeText={(text) => setFormData((prev) => ({ ...prev, stock: text }))} style={styles.input} mode="outlined" keyboardType="numeric" error={!!errors.stock} />
-            {errors.stock && <Text style={styles.errorText}>{errors.stock}</Text>}
-
-            <Text style={styles.sectionTitle}>Category *</Text>
-            <Menu visible={categoryMenuVisible} onDismiss={() => setCategoryMenuVisible(false)} anchor={
-              <Button mode="outlined" onPress={() => setCategoryMenuVisible(true)} style={[styles.categoryButton, errors.category && styles.errorBorder]} contentStyle={{ justifyContent: 'flex-start' }}>
-                {getCategoryName(formData.category)}
+              <Button
+                mode="contained"
+                onPress={showImagePicker}
+                icon="camera-plus"
+                style={styles.addImageButton}
+                disabled={formData.images.length >= 5}
+              >
+                {formData.images.length === 0 ? "Add Product Images" : "Add More Images"}
               </Button>
-            }>
-              {categories.map((cat) => (
-                <Menu.Item key={cat._id} title={cat.name} onPress={() => {
-                  setFormData((prev) => ({ ...prev, category: cat._id }))
-                  setCategoryMenuVisible(false)
-                }} />
-              ))}
-            </Menu>
-            {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-
-            <Text style={styles.sectionTitle}>Specifications</Text>
-            <View style={styles.specInputContainer}>
-              <TextInput label="Key" value={specInput.key} onChangeText={(text) => setSpecInput((prev) => ({ ...prev, key: text }))} style={[styles.input, styles.halfWidth]} mode="outlined" />
-              <TextInput label="Value" value={specInput.value} onChangeText={(text) => setSpecInput((prev) => ({ ...prev, value: text }))} style={[styles.input, styles.halfWidth]} mode="outlined" />
-            </View>
-            <Button mode="outlined" onPress={addSpecification} disabled={!specInput.key || !specInput.value} style={styles.addSpecButton}>
-              Add Specification
-            </Button>
-
-            <View style={styles.specificationsContainer}>
-              {formData.specifications.map((spec, index) => (
-                <Chip key={index} onClose={() => removeSpecification(index)} style={styles.specificationChip}>
-                  {spec.key}: {spec.value}
-                </Chip>
-              ))}
+              
+              {errors.images && <Text style={styles.errorText}>{errors.images}</Text>}
+              
+              <Text style={styles.imageHint}>
+                • First image will be the primary image{'\n'}
+                • Choose aspect ratio before capturing/selecting{'\n'}
+                • Recommended: 1000x750px or higher{'\n'}
+                • Formats: JPEG, PNG
+              </Text>
             </View>
 
-            <Button mode="contained" onPress={handleSubmit} style={styles.submitButton} contentStyle={styles.submitButtonContent}>
+            <Divider style={styles.divider} />
+
+            {/* Form Fields */}
+            <View style={styles.section}>
+              <TextInput
+                label="Product Name *"
+                value={formData.name}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                style={styles.input}
+                mode="outlined"
+                error={!!errors.name}
+                left={<TextInput.Icon icon="tag" />}
+                maxLength={100}
+              />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+              <TextInput
+                label="Description *"
+                value={formData.description}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                style={styles.input}
+                mode="outlined"
+                multiline
+                numberOfLines={4}
+                error={!!errors.description}
+                left={<TextInput.Icon icon="text" />}
+                maxLength={1000}
+              />
+              {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
+
+              <View style={styles.rowContainer}>
+                <TextInput
+                  label="Price *"
+                  value={formData.price}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, price: text }))}
+                  style={[styles.input, styles.halfWidth]}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  error={!!errors.price}
+                  left={<TextInput.Icon icon="currency-usd" />}
+                />
+
+                <TextInput
+                  label="Stock Quantity"
+                  value={formData.stock}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, stock: text }))}
+                  style={[styles.input, styles.halfWidth]}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  error={!!errors.stock}
+                  left={<TextInput.Icon icon="package-variant" />}
+                />
+              </View>
+              
+              {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+              {errors.stock && <Text style={styles.errorText}>{errors.stock}</Text>}
+            </View>
+
+            <Divider style={styles.divider} />
+
+            {/* Category Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Category *</Text>
+              <Menu
+                visible={categoryMenuVisible}
+                onDismiss={() => setCategoryMenuVisible(false)}
+                anchor={
+                  <Button
+                    mode="outlined"
+                    onPress={() => setCategoryMenuVisible(true)}
+                    style={[styles.categoryButton, errors.category && styles.errorBorder]}
+                    contentStyle={styles.categoryButtonContent}
+                    icon="chevron-down"
+                  >
+                    {getCategoryName(formData.category)}
+                  </Button>
+                }
+              >
+                {categories.map((cat) => (
+                  <Menu.Item
+                    key={cat._id}
+                    title={cat.name}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, category: cat._id }))
+                      setCategoryMenuVisible(false)
+                    }}
+                  />
+                ))}
+              </Menu>
+              {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+            </View>
+
+            <Divider style={styles.divider} />
+
+            {/* Specifications Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Specifications (Optional)</Text>
+              <Text style={styles.sectionSubtitle}>
+                Add product specifications like size, weight, material, etc.
+              </Text>
+              
+              <View style={styles.specInputContainer}>
+                <TextInput
+                  label="Specification Name"
+                  value={specInput.key}
+                  onChangeText={(text) => setSpecInput(prev => ({ ...prev, key: text }))}
+                  style={[styles.input, styles.halfWidth]}
+                  mode="outlined"
+                  maxLength={50}
+                />
+                <TextInput
+                  label="Value"
+                  value={specInput.value}
+                  onChangeText={(text) => setSpecInput(prev => ({ ...prev, value: text }))}
+                  style={[styles.input, styles.halfWidth]}
+                  mode="outlined"
+                  maxLength={100}
+                />
+              </View>
+
+              <Button
+                mode="outlined"
+                onPress={addSpecification}
+                disabled={!specInput.key.trim() || !specInput.value.trim()}
+                style={styles.addSpecButton}
+                icon="plus"
+              >
+                Add Specification
+              </Button>
+
+              {formData.specifications.length > 0 && (
+                <View style={styles.specificationsContainer}>
+                  <Text style={styles.specificationsLabel}>
+                    {formData.specifications.length} specification{formData.specifications.length !== 1 ? 's' : ''} added:
+                  </Text>
+                  <View style={styles.specificationsWrapper}>
+                    {formData.specifications.map((spec, index) => (
+                      <Chip
+                        key={index}
+                        onClose={() => removeSpecification(index)}
+                        style={styles.specificationChip}
+                        mode="outlined"
+                      >
+                        {spec.key}: {spec.value}
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={handleSubmit}
+              style={styles.submitButton}
+              contentStyle={styles.submitButtonContent}
+              icon={isEditing ? "content-save" : "plus"}
+            >
               {isEditing ? "Update Product" : "Create Product"}
             </Button>
           </Card.Content>
         </Card>
 
+        {/* Aspect Ratio Selection Modal */}
+        <Portal>
+          <Modal
+            visible={aspectRatioModalVisible}
+            onDismiss={() => setAspectRatioModalVisible(false)}
+            contentContainerStyle={styles.aspectRatioModal}
+          >
+            <Card style={styles.aspectRatioCard}>
+              <Card.Content>
+                <Text style={styles.aspectRatioTitle}>Choose Image Aspect Ratio</Text>
+                <Text style={styles.aspectRatioSubtitle}>
+                  Select the aspect ratio for your product image
+                </Text>
+                
+                <RadioButton.Group
+                  onValueChange={setSelectedAspectRatio}
+                  value={selectedAspectRatio}
+                >
+                  {ASPECT_RATIOS.map((ratio) => (
+                    <View key={ratio.value} style={styles.aspectRatioOption}>
+                      <View style={styles.aspectRatioInfo}>
+                        <Text style={styles.aspectRatioLabel}>{ratio.label}</Text>
+                        <Text style={styles.aspectRatioDescription}>{ratio.description}</Text>
+                      </View>
+                      <RadioButton value={ratio.value} />
+                    </View>
+                  ))}
+                </RadioButton.Group>
+
+                <View style={styles.aspectRatioActions}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setAspectRatioModalVisible(false)}
+                    style={styles.aspectRatioCancelButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={selectedImageForCrop?.action === 'recrop' ? handleRecrop : handleAspectRatioSelection}
+                    style={styles.aspectRatioConfirmButton}
+                  >
+                    Continue
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          </Modal>
+        </Portal>
+
+        {/* Custom Crop Modal */}
+        <Portal>
+          <Modal
+            visible={cropModalVisible}
+            onDismiss={() => setCropModalVisible(false)}
+            contentContainerStyle={styles.cropModal}
+          >
+            <Card style={styles.cropCard}>
+              <Card.Content>
+                <Text style={styles.cropTitle}>Custom Crop</Text>
+                {selectedImageForCrop?.uri && (
+                  <View style={styles.cropImageContainer}>
+                    <Image
+                      source={{ uri: selectedImageForCrop.uri }}
+                      style={styles.cropPreviewImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+                
+                <View style={styles.cropActions}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setCropModalVisible(false)}
+                    style={styles.cropCancelButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleCustomCrop}
+                    style={styles.cropConfirmButton}
+                  >
+                    Apply Crop
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          </Modal>
+        </Portal>
+
+        {/* Fullscreen Image Modal */}
         <Modal visible={!!fullscreenImage} transparent animationType="fade">
           <Pressable style={styles.modalOverlay} onPress={() => setFullscreenImage(null)}>
-            <Image source={{ uri: fullscreenImage }} style={styles.fullscreenImage} resizeMode="contain" />
+            <View style={styles.modalContent}>
+              <IconButton
+                icon="close"
+                iconColor="white"
+                size={24}
+                style={styles.closeButton}
+                onPress={() => setFullscreenImage(null)}
+              />
+              <Image
+                source={{ uri: fullscreenImage }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            </View>
           </Pressable>
         </Modal>
-
-        <ImagePickerModal visible={imagePickerVisible} onDismiss={() => setImagePickerVisible(false)} onPickImage={handleImagePick} />
-        <ImageCropModal visible={imageCropVisible} onDismiss={() => setImageCropVisible(false)} imageUri={selectedImage?.uri} onCropComplete={handleImageCrop} />
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -289,57 +883,104 @@ const styles = StyleSheet.create({
     margin: spacing.md,
     backgroundColor: theme.colors.surface,
     ...shadows.medium,
+    borderRadius: theme.roundness * 2,
+  },
+  cardContent: {
+    padding: spacing.lg,
   },
   title: {
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "700",
     color: theme.colors.primary,
     marginBottom: spacing.lg,
     textAlign: "center",
+  },
+  
+  // Section Styles
+  section: {
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: theme.colors.onSurface,
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
   },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: spacing.md,
+    lineHeight: 16,
+  },
+  divider: {
+    marginVertical: spacing.lg,
+  },
+  
+  // Images Section
   imagesContainer: {
     marginBottom: spacing.md,
   },
+  imagesContentContainer: {
+    paddingRight: spacing.md,
+  },
   imageWrapper: {
     marginRight: spacing.md,
-    alignItems: "center",
+    position: 'relative',
   },
   image: {
     width: 120,
     height: 90,
     borderRadius: theme.roundness,
-    marginBottom: spacing.xs,
+    backgroundColor: theme.colors.surfaceVariant,
   },
-  fullscreenImage: {
-    width: "100%",
-    height: "100%",
+  primaryBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
-    justifyContent: "center",
-    alignItems: "center",
+  primaryBadgeText: {
+    color: theme.colors.onPrimary,
+    fontSize: 10,
+    fontWeight: '600',
   },
-  removeImageButton: {
-    borderColor: theme.colors.error,
+  imageActions: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: -8,
+    right: -8,
+  },
+  cropImageIcon: {
+    backgroundColor: theme.colors.surface,
+    margin: 0,
+    marginRight: 4,
+  },
+  removeImageIcon: {
+    backgroundColor: theme.colors.surface,
+    margin: 0,
   },
   addImageButton: {
     backgroundColor: theme.colors.primary,
-    marginBottom: spacing.md,
-  },
-  input: {
     marginBottom: spacing.sm,
   },
-  specInputContainer: {
+  imageHint: {
+    fontSize: 11,
+    color: theme.colors.onSurfaceVariant,
+    lineHeight: 16,
+    marginTop: spacing.sm,
+  },
+  
+  // Form Styles
+  input: {
+    marginBottom: spacing.sm,
+    backgroundColor: theme.colors.surface,
+  },
+  rowContainer: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   halfWidth: {
     flex: 1,
@@ -348,36 +989,184 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     fontSize: 12,
     marginTop: -spacing.sm,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.sm,
+    marginBottom: spacing.md,
+    marginLeft: spacing.md,
   },
+  
+  // Category Styles
   categoryButton: {
     borderColor: theme.colors.outline,
-    justifyContent: "flex-start",
     marginBottom: spacing.sm,
+  },
+  categoryButtonContent: {
+    justifyContent: "space-between",
+    flexDirection: "row-reverse",
   },
   errorBorder: {
     borderColor: theme.colors.error,
   },
+  
+  // Specifications Styles
+  specInputContainer: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
   addSpecButton: {
-    backgroundColor: theme.colors.secondary,
+    borderColor: theme.colors.secondary,
     marginBottom: spacing.md,
   },
   specificationsContainer: {
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: spacing.md,
+    borderRadius: theme.roundness,
+  },
+  specificationsLabel: {
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: spacing.sm,
+    fontWeight: '500',
+  },
+  specificationsWrapper: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xs,
-    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   specificationChip: {
     backgroundColor: theme.colors.primaryContainer,
-    marginBottom: spacing.xs,
+    borderColor: theme.colors.primary,
   },
+  
+  // Submit Button
   submitButton: {
     backgroundColor: theme.colors.primary,
     marginTop: spacing.md,
+    borderRadius: theme.roundness * 2,
   },
   submitButtonContent: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  
+  // Aspect Ratio Modal Styles
+  aspectRatioModal: {
+    margin: spacing.lg,
+    justifyContent: 'center',
+  },
+  aspectRatioCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness * 2,
+  },
+  aspectRatioTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.onSurface,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  aspectRatioSubtitle: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  aspectRatioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.outline,
+  },
+  aspectRatioInfo: {
+    flex: 1,
+  },
+  aspectRatioLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.onSurface,
+    marginBottom: 2,
+  },
+  aspectRatioDescription: {
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
+  },
+  aspectRatioActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    gap: spacing.md,
+  },
+  aspectRatioCancelButton: {
+    flex: 1,
+    borderColor: theme.colors.outline,
+  },
+  aspectRatioConfirmButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+  },
+  
+  // Custom Crop Modal Styles
+  cropModal: {
+    margin: spacing.lg,
+    justifyContent: 'center',
+  },
+  cropCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.roundness * 2,
+  },
+  cropTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.onSurface,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  cropImageContainer: {
+    height: 200,
+    marginBottom: spacing.lg,
+    backgroundColor: theme.colors.surfaceVariant,
+    borderRadius: theme.roundness,
+    overflow: 'hidden',
+  },
+  cropPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cropActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  cropCancelButton: {
+    flex: 1,
+    borderColor: theme.colors.outline,
+  },
+  cropConfirmButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  fullscreenImage: {
+    width: "100%",
+    height: "100%",
   },
 })
