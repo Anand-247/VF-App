@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
-import { View, StyleSheet, ScrollView, RefreshControl } from "react-native"
-import { Text, Card } from "react-native-paper"
+import { View, StyleSheet, ScrollView, RefreshControl, Linking } from "react-native"
+import { Text, Card, Button } from "react-native-paper"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
+import { Entypo } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
 import { useAuth } from "../../context/AuthContext"
 import { categoriesAPI, productsAPI, bannersAPI } from "../../services/api"
@@ -74,9 +75,21 @@ export default function DashboardScreen({ navigation }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} style={styles.header}>
-        <Text style={styles.welcomeText}>Welcome back,</Text>
-        <Text style={styles.nameText}>{user?.name || "Admin"}</Text>
-        <Text style={styles.subtitleText}>Manage your furniture store</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.welcomeText}>Welcome back,</Text>
+          <Text style={styles.nameText}>{user?.name || "Admin"}</Text>
+          <Text style={styles.subtitleText}>Manage your furniture store</Text>
+        </View>
+        <View style={{color: 'white'}}>
+          <Button
+            mode="outlined"
+            onPress={() => Linking.openURL("https://ce-vf.vercel.app")}
+            style={{ marginVertical: 10, alignSelf: "flex-start", borderColor: 'white' }}
+          >
+            <Entypo name={'globe'} size={16} color={'white'} />
+            <Text style={{ color: 'white', size: 16 }}>  Website</Text>
+          </Button>
+        </View>
       </LinearGradient>
 
       <View style={styles.content}>
@@ -84,18 +97,18 @@ export default function DashboardScreen({ navigation }) {
 
         <View style={styles.statsContainer}>
           <StatCard
-            title="Categories"
-            value={stats.categories}
-            icon="folder-multiple"
-            color={theme.colors.primary}
-            onPress={() => navigation.navigate("Categories")}
-          />
-          <StatCard
             title="Products"
             value={stats.products}
             icon="package-variant"
             color={theme.colors.secondary}
             onPress={() => navigation.navigate("Products")}
+          />
+          <StatCard
+            title="Categories"
+            value={stats.categories}
+            icon="folder-multiple"
+            color={theme.colors.primary}
+            onPress={() => navigation.navigate("Categories")}
           />
           <StatCard
             title="Banners"
@@ -139,14 +152,14 @@ export default function DashboardScreen({ navigation }) {
               })
             }
           />
-          <QuickAction
+          {/* <QuickAction
             title="View Orders"
             icon="clipboard-list"
             color={theme.colors.info}
             onPress={() => {
-              /* Navigate to orders */
+              // Navigate to orders
             }}
-          />
+          /> */}
         </View>
       </View>
     </ScrollView>
@@ -159,8 +172,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
+    flexDirection: "row",
     padding: spacing.lg,
-    paddingTop: spacing.xxl,
+    paddingTop: spacing.lg,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
@@ -185,7 +199,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "bold",
     color: theme.colors.onBackground,
     marginBottom: spacing.md,
@@ -208,7 +222,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 25,
     fontWeight: "bold",
     color: theme.colors.primary,
   },

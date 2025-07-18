@@ -28,8 +28,7 @@ function AppContent() {
   return (
     <NavigationContainer>
       <StatusBar style="light" backgroundColor={theme.colors.primary} />
-      {/* <MainNavigator /> */}
-      {user ? <MainNavigator /> : <AuthNavigator />}
+        {user ? <MainNavigator /> : <AuthNavigator />}
       <Toast />
     </NavigationContainer>
   )

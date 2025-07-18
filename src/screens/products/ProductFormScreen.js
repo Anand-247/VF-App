@@ -29,6 +29,7 @@ import Toast from "react-native-toast-message"
 import { productsAPI, categoriesAPI } from "../../services/api"
 import { useLoading } from "../../context/LoadingContext"
 import { shadows, spacing, theme } from "../../theme/theme"
+import * as NavigationBar from 'expo-navigation-bar';
 
 const { width: screenWidth } = Dimensions.get('window')
 
@@ -84,6 +85,17 @@ export default function ProductFormScreen({ navigation, route }) {
       })
     }
   }, [product])
+
+  useEffect(() => {
+    const reHide = () => {
+      NavigationBar.setVisibilityAsync('hidden');
+      NavigationBar.setBehaviorAsync('immersive');
+    };
+
+    const interval = setInterval(reHide, 3000); // periodically re-hide
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Request permissions
   const requestPermissions = async () => {
@@ -524,7 +536,7 @@ export default function ProductFormScreen({ navigation, route }) {
             </Text>
 
             {/* Enhanced Images Section */}
-            <View style={styles.section}>
+            <View>
               <Text style={styles.sectionTitle}>Product Images *</Text>
               <Text style={styles.sectionSubtitle}>
                 Add up to 5 high-quality images ({formData.images.length}/5)
@@ -596,7 +608,7 @@ export default function ProductFormScreen({ navigation, route }) {
             <Divider style={styles.divider} />
 
             {/* Form Fields */}
-            <View style={styles.section}>
+            <View>
               <TextInput
                 label="Product Name *"
                 value={formData.name}
@@ -654,7 +666,7 @@ export default function ProductFormScreen({ navigation, route }) {
             <Divider style={styles.divider} />
 
             {/* Category Section */}
-            <View style={styles.section}>
+            <View>
               <Text style={styles.sectionTitle}>Category *</Text>
               <Menu
                 visible={categoryMenuVisible}
@@ -688,7 +700,7 @@ export default function ProductFormScreen({ navigation, route }) {
             <Divider style={styles.divider} />
 
             {/* Specifications Section */}
-            <View style={styles.section}>
+            <View>
               <Text style={styles.sectionTitle}>Specifications (Optional)</Text>
               <Text style={styles.sectionSubtitle}>
                 Add product specifications like size, weight, material, etc.
@@ -894,11 +906,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     marginBottom: spacing.lg,
     textAlign: "center",
-  },
-  
-  // Section Styles
-  section: {
-    marginBottom: spacing.lg,
   },
   sectionTitle: {
     fontSize: 16,

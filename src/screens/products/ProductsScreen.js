@@ -167,6 +167,8 @@ export default function ProductsScreen({ navigation }) {
     <Modal
       visible={imageViewerVisible}
       transparent={true}
+      statusBarTranslucent={true}
+      presentationStyle="overFullScreen"
       animationType="fade"
       onRequestClose={closeImageViewer}
     >
@@ -226,7 +228,7 @@ export default function ProductsScreen({ navigation }) {
 
   const ProductCard = ({ item }) => (
     <Card style={styles.card} elevation={3}>
-      <View style={styles.imageContainer}>
+      <TouchableOpacity style={styles.imageContainer} onPress={() => openImageViewer(item.images, 0)}>
         <Card.Cover
           source={{ 
             uri: item.images?.[0]?.url || 'https://via.placeholder.com/300x200?text=No+Image' 
@@ -245,21 +247,7 @@ export default function ProductsScreen({ navigation }) {
             <Text style={styles.imageCountText}>{item.images.length}</Text>
           </View>
         )}
-
-        {/* View button overlay */}
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={() => openImageViewer(item.images, 0)}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons 
-            name="eye" 
-            size={20} 
-            color={theme.colors.onPrimary} 
-          />
-          <Text style={styles.viewButtonText}>View</Text>
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
 
       <Card.Content style={styles.cardContent}>
         <View style={styles.cardHeader}>

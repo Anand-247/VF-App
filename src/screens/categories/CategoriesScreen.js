@@ -143,6 +143,8 @@ export default function CategoriesScreen({ navigation }) {
       visible={imageViewerVisible}
       transparent={true}
       animationType="fade"
+      statusBarTranslucent={true}
+      presentationStyle="overFullScreen"
       onRequestClose={closeImageViewer}
     >
       <View style={styles.imageViewerContainer}>
@@ -201,7 +203,7 @@ export default function CategoriesScreen({ navigation }) {
 
   const CategoryCard = ({ item }) => (
     <Card style={styles.card} elevation={3}>
-      <View style={styles.imageContainer}>
+      <TouchableOpacity style={styles.imageContainer} onPress={() => openImageViewer(item)}>
         <Card.Cover
           source={{ 
             uri: item.image?.url || 'https://via.placeholder.com/300x300?text=No+Image' 
@@ -223,20 +225,6 @@ export default function CategoriesScreen({ navigation }) {
           </View>
         )}
 
-        {/* View button overlay */}
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={() => openImageViewer(item)}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons 
-            name="eye" 
-            size={18} 
-            color={theme.colors.onPrimary} 
-          />
-          <Text style={styles.viewButtonText}>View</Text>
-        </TouchableOpacity>
-
         {/* Featured badge */}
         {item.featured && (
           <View style={styles.featuredBadge}>
@@ -247,7 +235,7 @@ export default function CategoriesScreen({ navigation }) {
             />
           </View>
         )}
-      </View>
+      </TouchableOpacity>
 
       <Card.Content style={styles.cardContent}>
         <View style={styles.cardHeader}>

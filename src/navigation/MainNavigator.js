@@ -12,6 +12,7 @@ import ProductFormScreen from "../screens/products/ProductFormScreen"
 import BannersScreen from "../screens/banners/BannersScreen"
 import BannerFormScreen from "../screens/banners/BannerFormScreen"
 import ProfileScreen from "../screens/profile/ProfileScreen"
+import { SafeAreaView } from "react-native-safe-area-context"
 
 const Tab = createBottomTabNavigator()
 const Stack = createStackNavigator()
@@ -63,6 +64,7 @@ function BannersStack() {
 
 export default function MainNavigator() {
   return (
+    <SafeAreaView style={{ flex: 1 }}>
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
@@ -89,7 +91,6 @@ export default function MainNavigator() {
           borderTopColor: theme.colors.outline,
           height: 60,
           paddingBottom: 8,
-          marginBottom: 20,
           paddingTop: 8,
         },
         headerStyle: {
@@ -101,11 +102,12 @@ export default function MainNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: false }} />
       <Tab.Screen name="Categories" component={CategoriesStack} options={{ headerShown: false }} />
       <Tab.Screen name="Products" component={ProductsStack} options={{ headerShown: false }} />
       <Tab.Screen name="Banners" component={BannersStack} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+    </SafeAreaView>
   )
 }
