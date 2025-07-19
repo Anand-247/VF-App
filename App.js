@@ -12,11 +12,27 @@ import LoadingScreen from "./src/components/LoadingScreen"
 import { theme } from "./src/theme/theme"
 import { useAuth } from "./src/context/AuthContext"
 import { useEffect } from "react"
+import * as NavigationBar from "expo-navigation-bar"
 
 const Stack = createStackNavigator()
 
 function AppContent() {
   const { user, loading } = useAuth()
+
+  useEffect(() => {
+    const hideNavigation = async () => {
+      await NavigationBar.setVisibilityAsync("hidden")   // 👈 Hides navigation bar
+      await NavigationBar.setBehaviorAsync("overlay-swipe") // Allows swipe up to show temporarily
+    }
+
+    hideNavigation()
+
+    // Optional: Reset visibility when screen unmounts
+    // return () => {
+    //   NavigationBar.setVisibilityAsync("visible")
+    //   NavigationBar.setBehaviorAsync("inset-swipe")
+    // }
+  })
   
   useEffect(()=>{
   },[user])
