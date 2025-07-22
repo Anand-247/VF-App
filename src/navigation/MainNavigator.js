@@ -14,6 +14,7 @@ import ProductFormScreen from "../screens/products/ProductFormScreen"
 import BannersScreen from "../screens/banners/BannersScreen"
 import BannerFormScreen from "../screens/banners/BannerFormScreen"
 import ProfileScreen from "../screens/profile/ProfileScreen"
+import QueriesScreen from "../screens/query/QueriesScreen"
 
 const Tab = createBottomTabNavigator()
 const Stack = createStackNavigator()
@@ -112,6 +113,30 @@ function BannersStack() {
   )
 }
 
+function QueriesStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme.colors.surface,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.outline,
+        },
+        headerTintColor: theme.colors.onSurface,
+        headerTitleStyle: {
+          fontWeight: "600",
+          fontSize: 18,
+        },
+        headerBackTitleVisible: false,
+      }}
+    >
+      <Stack.Screen name="Queries" component={QueriesScreen} options={{ title: "Queries" }} />
+    </Stack.Navigator>
+  )
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -127,6 +152,8 @@ function MainTabs() {
             iconName = focused ? "package-variant" : "package-variant-closed"
           } else if (route.name === "Banners") {
             iconName = focused ? "image-multiple" : "image-multiple-outline"
+          } else if (route.name === "Queries") {
+            iconName = focused ? "comment-question" : "comment-question-outline"
           } else if (route.name === "Profile") {
             iconName = focused ? "account" : "account-outline"
           }
@@ -170,6 +197,7 @@ function MainTabs() {
       <Tab.Screen name="Categories" component={CategoriesStack} options={{ headerShown: false }} />
       <Tab.Screen name="Products" component={ProductsStack} options={{ headerShown: false }} />
       <Tab.Screen name="Banners" component={BannersStack} options={{ headerShown: false }} />
+      <Tab.Screen name="Queries" component={QueriesStack} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   )

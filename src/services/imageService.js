@@ -58,23 +58,55 @@ export const pickImage = async (source = "library") => {
 
 export const cropImage = async (imageUri, cropSize) => {
   try {
-    const { width, height } = cropSize
-    const manipulatedImage = await ImageManipulator.manipulateAsync(
+    const imageInfo = await ImageManipulator.getInfoAsync(imageUri)
+    const originalWidth = imageInfo.width
+    const originalHeight = imageInfo.height
+
+    const targetRatio = cropSize.width / cropSize.height
+
+    let cropWidth = originalWidth
+    let cropHeight = cropWidth / targetRatio
+
+    if (cropHeight > originalHeight) {
+      cropHeight = originalHeight
+      cropWidth = cropHeight * targetRatio
+    }
+
+    const originX = (originalWidth - cropWidth) / 2
+    const originY = (originalHeight - cropHeight) / 2
+
+    const croppedImage = await ImageManipulator.manipulateAsync(
       imageUri,
-      [{ resize: { width: Math.max(width, height) } }, { crop: { originX: 0, originY: 0, width, height } }],
+      [
+        {
+          crop: {
+            originX,
+            originY,
+            width: cropWidth,
+            height: cropHeight,
+          },
+        },
+        {
+          resize: {
+            width: cropSize.width,
+            height: cropSize.height,
+          },
+        },
+      ],
       {
         compress: 0.8,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: false,
-      },
+      }
     )
 
-    return manipulatedImage
+    return croppedImage
   } catch (error) {
     console.error("Error cropping image:", error)
     throw error
   }
 }
+
 
 export const uploadImage = async (imageUri, folder = "general") => {
   try {

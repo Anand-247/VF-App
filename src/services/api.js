@@ -74,6 +74,11 @@ export const bannersAPI = {
   delete: (id) => api.delete(`/banners/${id}`),
 }
 
+export const contactsAPI = {
+  getAll: () => api.get("/contact"),
+  delete: (id) => api.delete(`/contact/${id}`),
+}
+
 export const uploadAPI = {
   uploadImage: (formData) => {
     return api.post("/upload", formData, {

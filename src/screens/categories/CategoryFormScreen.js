@@ -6,12 +6,15 @@ import * as ImagePicker from 'expo-image-picker'
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import { categoriesAPI } from "../../services/api"
 import { useLoading } from "../../context/LoadingContext"
+import ImagePickerModal from "../../components/ImagePickerModal"
 import { theme, spacing, shadows } from "../../theme/theme"
 import Toast from "react-native-toast-message"
 
 export default function CategoryFormScreen({ navigation, route }) {
   const { category } = route.params || {}
   const isEditing = !!category
+  const [imagePickerVisible, setImagePickerVisible] = useState(false)
+  const [selectedImage, setSelectedImage] = useState(null)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -69,6 +72,25 @@ export default function CategoryFormScreen({ navigation, route }) {
     )
   }
 
+  const handleImagePick = async (source) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,        
+        aspect: [3, 4],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        await processImage(result.assets[0])
+      }
+    } catch (err) {
+      console.error("Image pick error", err)
+      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
+    }
+  }
+
+
   const openCamera = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync()
@@ -101,8 +123,8 @@ export default function CategoryFormScreen({ navigation, route }) {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: true,        
+        aspect: [3, 4],
         quality: 0.8,
       })
 
@@ -325,7 +347,8 @@ export default function CategoryFormScreen({ navigation, route }) {
                   <View style={styles.imageButtons}>
                     <Button 
                       mode="outlined" 
-                      onPress={showImagePicker} 
+                      // onPress={showImagePicker} 
+                      onPress={() => setImagePickerVisible(true)} 
                       style={styles.changeImageButton}
                       icon="camera"
                     >
@@ -345,7 +368,8 @@ export default function CategoryFormScreen({ navigation, route }) {
                 <View style={styles.noImageContainer}>
                   <Button
                     mode="contained"
-                    onPress={showImagePicker}
+                    // onPress={showImagePicker}
+                    onPress={()=>setImagePickerVisible(true)}
                     icon="camera-plus"
                     style={styles.addImageButton}
                     contentStyle={styles.addImageButtonContent}
@@ -449,6 +473,7 @@ export default function CategoryFormScreen({ navigation, route }) {
             </Button>
           </Card.Content>
         </Card>
+        <ImagePickerModal visible={imagePickerVisible} onDismiss={() => setImagePickerVisible(false)} onPickImage={handleImagePick} />
       </ScrollView>
     </KeyboardAvoidingView>
   )

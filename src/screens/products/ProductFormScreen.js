@@ -30,16 +30,19 @@ import { productsAPI, categoriesAPI } from "../../services/api"
 import { useLoading } from "../../context/LoadingContext"
 import { shadows, spacing, theme } from "../../theme/theme"
 import * as NavigationBar from 'expo-navigation-bar';
+import ImagePickerModal from "../../components/ImagePickerModal"
+import ImageCropModal from "../../components/ImageCropModal"
+import { pickImage } from "../../services/imageService"
 
 const { width: screenWidth } = Dimensions.get('window')
 
 // Aspect ratio presets for product images
 const ASPECT_RATIOS = [
-  { label: 'Square (1:1)', value: '1:1', ratio: [1, 1], description: 'Perfect for social media' },
+  // { label: 'Square (1:1)', value: '1:1', ratio: [1, 1], description: 'Perfect for social media' },
   { label: 'Standard (4:3)', value: '4:3', ratio: [4, 3], description: 'Classic product photos' },
-  { label: 'Wide (16:9)', value: '16:9', ratio: [16, 9], description: 'Banner style images' },
-  { label: 'Portrait (3:4)', value: '3:4', ratio: [3, 4], description: 'Tall product shots' },
-  { label: 'Custom', value: 'custom', ratio: null, description: 'Free form cropping' },
+  // { label: 'Wide (16:9)', value: '16:9', ratio: [16, 9], description: 'Banner style images' },
+  // { label: 'Portrait (3:4)', value: '3:4', ratio: [3, 4], description: 'Tall product shots' },
+  // { label: 'Custom', value: 'custom', ratio: null, description: 'Free form cropping' },
 ]
 
 export default function ProductFormScreen({ navigation, route }) {
@@ -66,8 +69,11 @@ export default function ProductFormScreen({ navigation, route }) {
   const [cropModalVisible, setCropModalVisible] = useState(false)
   const [selectedImageForCrop, setSelectedImageForCrop] = useState(null)
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('4:3')
+  const [selectedImage, setSelectedImage] = useState(null)
   const [aspectRatioModalVisible, setAspectRatioModalVisible] = useState(false)
+  const [imageCropVisible, setImageCropVisible] = useState(false)
   
+  const [imagePickerVisible, setImagePickerVisible] = useState(false)
   const { showLoading, hideLoading } = useLoading()
 
   useEffect(() => {
@@ -134,6 +140,31 @@ export default function ProductFormScreen({ navigation, route }) {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const handleImagePick = async (source) => {
+    try {
+      const image = await pickImage(source)
+      if (image) {
+        setSelectedImage(image)
+        setImageCropVisible(true)
+      }
+    } catch (err) {
+      console.error("Image pick error", err)
+      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
+    }
+  }
+
+  const handleImageCrop = async (croppedImage) => {
+    if (!croppedImage?.uri) return
+
+    setFormData((prev) => ({
+      ...prev,
+      images: [...prev.images, { uri: croppedImage.uri }],
+    }))
+
+    setSelectedImage(null)
+    setImageCropVisible(false)
   }
 
   // Enhanced image picker with aspect ratio selection
@@ -587,7 +618,7 @@ export default function ProductFormScreen({ navigation, route }) {
 
               <Button
                 mode="contained"
-                onPress={showImagePicker}
+                onPress={() => setImagePickerVisible(true)}
                 icon="camera-plus"
                 style={styles.addImageButton}
                 disabled={formData.images.length >= 5}
@@ -878,6 +909,8 @@ export default function ProductFormScreen({ navigation, route }) {
             </View>
           </Pressable>
         </Modal>
+        <ImagePickerModal visible={imagePickerVisible} onDismiss={() => setImagePickerVisible(false)} onPickImage={handleImagePick} />
+        <ImageCropModal visible={imageCropVisible} onDismiss={() => setImageCropVisible(false)} imageUri={selectedImage?.uri} onCropComplete={handleImageCrop} />
       </ScrollView>
     </KeyboardAvoidingView>
   )

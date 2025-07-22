@@ -19,20 +19,20 @@ const Stack = createStackNavigator()
 function AppContent() {
   const { user, loading } = useAuth()
 
-  useEffect(() => {
-    const hideNavigation = async () => {
-      await NavigationBar.setVisibilityAsync("hidden")   // 👈 Hides navigation bar
-      await NavigationBar.setBehaviorAsync("overlay-swipe") // Allows swipe up to show temporarily
-    }
+  // useEffect(() => {
+  //   const hideNavigation = async () => {
+  //     await NavigationBar.setVisibilityAsync("hidden")   // 👈 Hides navigation bar
+  //     await NavigationBar.setBehaviorAsync("overlay-swipe") // Allows swipe up to show temporarily
+  //   }
 
-    hideNavigation()
+  //   hideNavigation()
 
-    // Optional: Reset visibility when screen unmounts
-    // return () => {
-    //   NavigationBar.setVisibilityAsync("visible")
-    //   NavigationBar.setBehaviorAsync("inset-swipe")
-    // }
-  })
+  //   // Optional: Reset visibility when screen unmounts
+  //   // return () => {
+  //   //   NavigationBar.setVisibilityAsync("visible")
+  //   //   NavigationBar.setBehaviorAsync("inset-swipe")
+  //   // }
+  // })
   
   useEffect(()=>{
   },[user])

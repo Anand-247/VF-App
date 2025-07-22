@@ -152,14 +152,16 @@ export default function DashboardScreen({ navigation }) {
               })
             }
           />
-          {/* <QuickAction
-            title="View Orders"
+          <QuickAction
+          title="Queries  "
             icon="clipboard-list"
             color={theme.colors.info}
             onPress={() => {
-              // Navigate to orders
+              navigation.navigate("Queries"), {
+                screen: "QueriesScreen",
+              }
             }}
-          /> */}
+          />
         </View>
       </View>
     </ScrollView>
