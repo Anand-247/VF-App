@@ -3,7 +3,8 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from "re
 import { Text, TextInput, Button, Card, Switch } from "react-native-paper"
 import { Image } from "react-native"
 import { bannersAPI } from "../../services/api"
-import { pickImage } from "../../services/imageService"
+import * as ImagePicker from 'expo-image-picker'
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import ImagePickerModal from "../../components/ImagePickerModal"
 import { useLoading } from "../../context/LoadingContext"
 import { theme, spacing, shadows } from "../../theme/theme"
@@ -54,109 +55,89 @@ export default function BannerFormScreen({ navigation, route }) {
 
   const handleImagePick = async (source) => {
     try {
-      console.log("📸 Picking image from source:", source)
-      const image = await pickImage(source)
-      console.log("📸 Image picked:", image)
-      
-      if (image) {
-        // Skip cropping for banners - use image directly
-        console.log("✅ Using image directly (no crop):", image.uri)
-        
-        setFormData((prev) => ({
-          ...prev,
-          image: { uri: image.uri }
-        }))
-        
-        // Clear any previous image errors
-        setErrors((prev) => ({
-          ...prev,
-          image: null
-        }))
-        
-        Toast.show({
-          type: "success",
-          text1: "Success",
-          text2: "Image added successfully",
-        })
-        
-        setImagePickerVisible(false)
+      let result;
+
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
       } else {
-        console.warn("⚠️ No image returned from pickImage")
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
       }
-    } catch (error) {
-      console.error("❌ Error picking image:", error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to pick image",
-      })
+
+      if (!result.canceled && result.assets[0]) {
+        await processImage(result.assets[0])
+      }
+    } catch (err) {
+      console.error("Image pick error", err)
+      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
     }
   }
 
-  const handleImageCrop = async (croppedImage) => {
-    console.log("🔍 Cropped image received:", croppedImage)
-    
+  const processImage = async (imageAsset) => {
     try {
-      if (!croppedImage?.uri) {
-        console.error("❌ No URI in cropped image")
-        // If cropping failed, fall back to original image
-        if (selectedImage?.uri) {
-          console.log("⚠️ Using original image as fallback")
-          setFormData((prev) => ({
-            ...prev,
-            image: { uri: selectedImage.uri }
-          }))
+      showLoading("Processing image...")
+      
+      // Resize and compress image
+      const manipulatedImage = await manipulateAsync(
+        imageAsset.uri,
+        [
+          { resize: { width: 800 } }, // Resize to max width of 800px
+        ],
+        {
+          compress: 0.8,
+          format: SaveFormat.JPEG,
         }
-        return
-      }
+      )
 
-      console.log("✅ Setting cropped image URI:", croppedImage.uri)
-      
-      // Store the cropped image similar to product form
-      setFormData((prev) => ({
+      setFormData(prev => ({
         ...prev,
-        image: { uri: croppedImage.uri }
+        image: { uri: manipulatedImage.uri }
       }))
 
-      // Clear any previous image errors
-      setErrors((prev) => ({
-        ...prev,
-        image: null
-      }))
-      
       Toast.show({
         type: "success",
         text1: "Success",
         text2: "Image processed successfully",
       })
-      
     } catch (error) {
-      console.error("❌ Error in handleImageCrop:", error)
-      
-      // Fall back to original image if cropping fails
-      if (selectedImage?.uri) {
-        console.log("⚠️ Cropping failed, using original image")
-        setFormData((prev) => ({
-          ...prev,
-          image: { uri: selectedImage.uri }
-        }))
-        
-        Toast.show({
-          type: "info",
-          text1: "Info",
-          text2: "Using original image (crop failed)",
-        })
-      } else {
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: "Failed to process image",
-        })
-      }
+      console.error('Image processing error:', error)
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to process image",
+      })
     } finally {
-      setSelectedImage(null)
-      setImageCropVisible(false)
+      hideLoading()
     }
+  }
+
+  const removeImage = () => {
+    Alert.alert(
+      "Remove Image",
+      "Are you sure you want to remove this image?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            setFormData(prev => ({
+              ...prev,
+              image: null,
+            }))
+          }
+        }
+      ]
+    )
   }
 
   // Helper function to get file extension from URI
@@ -192,21 +173,15 @@ export default function BannerFormScreen({ navigation, route }) {
       form.append("link", formData.link || "")
       form.append("isActive", formData.isActive.toString())
 
-      // Handle image - only append if it's a new image with file URI
-      if (formData.image?.uri && formData.image.uri.startsWith("file://")) {
+      // Handle image
+      if (formData.image?.uri) {
         const ext = getFileExtension(formData.image.uri)
-        const type = getMimeType(ext)
-
         const file = {
           uri: formData.image.uri,
-          type,
-          name: `banner_image.${ext}`,
+          type: getMimeType(ext),
+          name: `banner_image_${Date.now()}.${ext}`,
         }
-
-        console.log("✅ Adding banner image:", file)
         form.append("image", file)
-      } else {
-        console.log("ℹ️ No new image to upload (using existing image)")
       }
 
       // Debug: Log FormData contents

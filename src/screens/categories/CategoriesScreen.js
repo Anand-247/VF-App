@@ -107,7 +107,9 @@ export default function CategoriesScreen({ navigation }) {
           text1: "Success",
           text2: "Category deleted successfully",
         })
-        loadCategories()
+        setCategories((prev) => prev.filter((cat) => cat._id !== id))
+        setFilteredCategories((prev) => prev.filter((cat) => cat._id !== id))
+        // loadCategories()
       }
     } catch (error) {
       console.error("Error deleting category:", error)
@@ -197,9 +199,11 @@ export default function CategoriesScreen({ navigation }) {
       <TouchableOpacity style={styles.cardTouchable} onPress={() => openImageViewer(item)}>
         <View style={styles.imageContainer}>
           <Card.Cover
-            source={{
-              uri: item.image?.url || 'https://via.placeholder.com/300x300?text=No+Image'
-            }}
+            source={
+              item.image?.url
+                ? { uri: item.image.url }
+                : require('../../../assets/imagePlaceholder.jpg')
+            }
             style={styles.cardImage}
           />
 
@@ -403,7 +407,7 @@ export default function CategoriesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background
+    backgroundColor: theme.colors.background,
   },
   searchContainer: {
     padding: spacing.md,
@@ -427,7 +431,7 @@ const styles = StyleSheet.create({
   // --- Category Card Styles ---
   card: {
     marginBottom: spacing.lg,
-    borderRadius: theme.roundness * 2.5, // Slightly more rounded for softness
+    borderRadius: theme.roundness * 2, // Slightly more rounded for softness
     overflow: "hidden",
     backgroundColor: theme.colors.surface,
     borderWidth: 1,

@@ -31,19 +31,9 @@ import { useLoading } from "../../context/LoadingContext"
 import { shadows, spacing, theme } from "../../theme/theme"
 import * as NavigationBar from 'expo-navigation-bar';
 import ImagePickerModal from "../../components/ImagePickerModal"
-import ImageCropModal from "../../components/ImageCropModal"
-import { pickImage } from "../../services/imageService"
 
 const { width: screenWidth } = Dimensions.get('window')
 
-// Aspect ratio presets for product images
-const ASPECT_RATIOS = [
-  // { label: 'Square (1:1)', value: '1:1', ratio: [1, 1], description: 'Perfect for social media' },
-  { label: 'Standard (4:3)', value: '4:3', ratio: [4, 3], description: 'Classic product photos' },
-  // { label: 'Wide (16:9)', value: '16:9', ratio: [16, 9], description: 'Banner style images' },
-  // { label: 'Portrait (3:4)', value: '3:4', ratio: [3, 4], description: 'Tall product shots' },
-  // { label: 'Custom', value: 'custom', ratio: null, description: 'Free form cropping' },
-]
 
 export default function ProductFormScreen({ navigation, route }) {
   const { product } = route.params || {}
@@ -65,14 +55,6 @@ export default function ProductFormScreen({ navigation, route }) {
   const [specInput, setSpecInput] = useState({ key: "", value: "" })
   const [categoryMenuVisible, setCategoryMenuVisible] = useState(false)
   
-  // Cropping states
-  const [cropModalVisible, setCropModalVisible] = useState(false)
-  const [selectedImageForCrop, setSelectedImageForCrop] = useState(null)
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState('4:3')
-  const [selectedImage, setSelectedImage] = useState(null)
-  const [aspectRatioModalVisible, setAspectRatioModalVisible] = useState(false)
-  const [imageCropVisible, setImageCropVisible] = useState(false)
-  
   const [imagePickerVisible, setImagePickerVisible] = useState(false)
   const { showLoading, hideLoading } = useLoading()
 
@@ -91,17 +73,6 @@ export default function ProductFormScreen({ navigation, route }) {
       })
     }
   }, [product])
-
-  useEffect(() => {
-    const reHide = () => {
-      NavigationBar.setVisibilityAsync('hidden');
-      NavigationBar.setBehaviorAsync('immersive');
-    };
-
-    const interval = setInterval(reHide, 3000); // periodically re-hide
-
-    return () => clearInterval(interval);
-  }, []);
 
   // Request permissions
   const requestPermissions = async () => {
@@ -142,303 +113,55 @@ export default function ProductFormScreen({ navigation, route }) {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleImagePick = async (source) => {
-    try {
-      const image = await pickImage(source)
-      if (image) {
-        setSelectedImage(image)
-        setImageCropVisible(true)
-      }
-    } catch (err) {
-      console.error("Image pick error", err)
-      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
-    }
-  }
-
-  const handleImageCrop = async (croppedImage) => {
-    if (!croppedImage?.uri) return
-
-    setFormData((prev) => ({
-      ...prev,
-      images: [...prev.images, { uri: croppedImage.uri }],
-    }))
-
-    setSelectedImage(null)
-    setImageCropVisible(false)
-  }
-
-  // Enhanced image picker with aspect ratio selection
-  const showImagePicker = () => {
-    if (formData.images.length >= 5) {
-      Alert.alert("Limit Reached", "You can add maximum 5 images per product")
-      return
-    }
-
-    Alert.alert(
-      "Add Product Image",
-      "Choose an option",
-      [
-        { text: "Camera", onPress: () => selectAspectRatioAndOpenCamera() },
-        { text: "Gallery", onPress: () => selectAspectRatioAndOpenGallery() },
-        { text: "Cancel", style: "cancel" }
-      ]
-    )
-  }
-
-  const selectAspectRatioAndOpenCamera = () => {
-    setAspectRatioModalVisible(true)
-    // Store the action to perform after aspect ratio selection
-    setSelectedImageForCrop({ action: 'camera' })
-  }
-
-  const selectAspectRatioAndOpenGallery = () => {
-    setAspectRatioModalVisible(true)
-    // Store the action to perform after aspect ratio selection
-    setSelectedImageForCrop({ action: 'gallery' })
-  }
-
-  const handleAspectRatioSelection = () => {
-    setAspectRatioModalVisible(false)
-    
-    if (selectedImageForCrop?.action === 'camera') {
-      openCamera()
-    } else if (selectedImageForCrop?.action === 'gallery') {
-      openGallery()
-    }
-  }
-
-  const openCamera = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera permission is required!')
-        return
-      }
-
-      const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
-      
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: selectedRatio?.ratio ? true : false,
-        aspect: selectedRatio?.ratio || [4, 3],
-        quality: 0.9,
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        if (selectedAspectRatio === 'custom') {
-          // Show custom crop modal
-          setSelectedImageForCrop({ ...result.assets[0], needsCrop: true })
-          setCropModalVisible(true)
-        } else {
-          await processImage(result.assets[0])
-        }
-      }
-    } catch (error) {
-      console.error('Camera error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to capture image",
-      })
-    }
-  }
-
-  const openGallery = async () => {
-    try {
-      const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
-      
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: selectedRatio?.ratio ? true : false,
-        aspect: selectedRatio?.ratio || [4, 3],
-        quality: 0.9,
-        allowsMultipleSelection: false, // Disable multiple selection when cropping is involved
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        if (selectedAspectRatio === 'custom') {
-          // Show custom crop modal
-          setSelectedImageForCrop({ ...result.assets[0], needsCrop: true })
-          setCropModalVisible(true)
-        } else {
-          await processImage(result.assets[0])
-        }
-      }
-    } catch (error) {
-      console.error('Gallery error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to select image",
-      })
-    }
-  }
-
-  // Custom crop functionality
-  const handleCustomCrop = async () => {
-    if (!selectedImageForCrop?.uri) return
-
-    try {
-      showLoading("Cropping image...")
-      
-      // For custom cropping, we'll use a square crop as default
-      // You can enhance this with a more sophisticated cropping interface
-      const imageInfo = await manipulateAsync(
-        selectedImageForCrop.uri,
-        [],
-        { format: SaveFormat.JPEG }
-      )
-
-      // Simple center crop to square
-      const size = Math.min(imageInfo.width, imageInfo.height)
-      const originX = (imageInfo.width - size) / 2
-      const originY = (imageInfo.height - size) / 2
-
-      const croppedImage = await manipulateAsync(
-        selectedImageForCrop.uri,
-        [
-          {
-            crop: {
-              originX,
-              originY,
-              width: size,
-              height: size,
-            },
-          },
-        ],
-        {
-          compress: 0.8,
-          format: SaveFormat.JPEG,
-        }
-      )
-
-      await processImage({ uri: croppedImage.uri })
-      setCropModalVisible(false)
-      setSelectedImageForCrop(null)
-
-    } catch (error) {
-      console.error('Crop error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to crop image",
-      })
-    } finally {
-      hideLoading()
-    }
-  }
-
   // Process and compress image
-  const processImage = async (imageAsset) => {
+    const handleImagePick = async (source) => {
     try {
-      showLoading("Processing image...")
-      
-      // Resize and compress image
-      const manipulatedImage = await manipulateAsync(
-        imageAsset.uri,
-        [
-          { resize: { width: 1000 } }, // Resize to max width of 1000px for products
-        ],
-        {
-          compress: 0.8,
-          format: SaveFormat.JPEG,
-        }
-      )
+      let result;
 
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, { uri: manipulatedImage.uri }]
-      }))
-
-      // Clear image error if exists
-      if (errors.images) {
-        setErrors(prev => ({ ...prev, images: null }))
-      }
-
-      Toast.show({
-        type: "success",
-        text1: "Success",
-        text2: "Image added successfully",
-      })
-
-    } catch (error) {
-      console.error('Image processing error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to process image",
-      })
-    } finally {
-      hideLoading()
-    }
-  }
-
-  // Re-crop existing image
-  const recropImage = (index) => {
-    Alert.alert(
-      "Re-crop Image",
-      "Choose aspect ratio for re-cropping",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Select Ratio", 
-          onPress: () => {
-            setSelectedImageForCrop({ index, action: 'recrop' })
-            setAspectRatioModalVisible(true)
-          }
-        }
-      ]
-    )
-  }
-
-  const handleRecrop = async () => {
-    setAspectRatioModalVisible(false)
-    
-    if (selectedImageForCrop?.action === 'recrop') {
-      const imageIndex = selectedImageForCrop.index
-      const imageUri = formData.images[imageIndex].uri || formData.images[imageIndex].url
-      
-      try {
-        const selectedRatio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio)
-        
-        const result = await ImagePicker.launchImageLibraryAsync({
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
-          aspect: selectedRatio?.ratio || [4, 3],
-          quality: 0.9,
-        })
-
-        if (!result.canceled && result.assets[0]) {
-          const processedImage = await manipulateAsync(
-            result.assets[0].uri,
-            [{ resize: { width: 1000 } }],
-            { compress: 0.8, format: SaveFormat.JPEG }
-          )
-
-          // Replace the image at the specific index
-          setFormData(prev => ({
-            ...prev,
-            images: prev.images.map((img, idx) => 
-              idx === imageIndex ? { uri: processedImage.uri } : img
-            )
-          }))
-
-          Toast.show({
-            type: "success",
-            text1: "Success",
-            text2: "Image re-cropped successfully",
-          })
-        }
-      } catch (error) {
-        console.error('Re-crop error:', error)
-        Toast.show({
-          type: "error",
-          text1: "Error",
-          text2: "Failed to re-crop image",
-        })
+          aspect: [4, 5],
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
       }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        showLoading("Processing images...");
+        const processedImages = [];
+        for (const asset of result.assets) {
+          const manipulatedImage = await manipulateAsync(
+            asset.uri,
+            [{ resize: { width: 800 } }],
+            { compress: 0.8, format: SaveFormat.JPEG }
+          );
+          processedImages.push({ uri: manipulatedImage.uri });
+        }
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, ...processedImages].slice(0, 5) // Limit to 5 images total
+        }));
+        hideLoading();
+        Toast.show({
+          type: "success",
+          text1: "Images added successfully",
+        });
+      }
+    } catch (err) {
+      hideLoading();
+      console.error("Image pick error", err);
+      Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick images" });
     }
-  }
+  };
+
 
   const removeImage = (index) => {
     Alert.alert(
@@ -596,13 +319,13 @@ export default function ProductFormScreen({ navigation, route }) {
                       </Pressable>
                       
                       <View style={styles.imageActions}>
-                        <IconButton
+                        {/* <IconButton
                           icon="crop"
                           size={16}
                           iconColor={theme.colors.secondary}
                           style={styles.cropImageIcon}
                           onPress={() => recropImage(index)}
-                        />
+                        /> */}
                         <IconButton
                           icon="close"
                           size={16}
@@ -628,12 +351,12 @@ export default function ProductFormScreen({ navigation, route }) {
               
               {errors.images && <Text style={styles.errorText}>{errors.images}</Text>}
               
-              <Text style={styles.imageHint}>
+              {/* <Text style={styles.imageHint}>
                 • First image will be the primary image{'\n'}
                 • Choose aspect ratio before capturing/selecting{'\n'}
                 • Recommended: 1000x750px or higher{'\n'}
                 • Formats: JPEG, PNG
-              </Text>
+              </Text> */}
             </View>
 
             <Divider style={styles.divider} />
@@ -731,7 +454,7 @@ export default function ProductFormScreen({ navigation, route }) {
             <Divider style={styles.divider} />
 
             {/* Specifications Section */}
-            <View>
+            {/* <View>
               <Text style={styles.sectionTitle}>Specifications (Optional)</Text>
               <Text style={styles.sectionSubtitle}>
                 Add product specifications like size, weight, material, etc.
@@ -785,7 +508,7 @@ export default function ProductFormScreen({ navigation, route }) {
                   </View>
                 </View>
               )}
-            </View>
+            </View> */}
 
             <Button
               mode="contained"
@@ -799,99 +522,8 @@ export default function ProductFormScreen({ navigation, route }) {
           </Card.Content>
         </Card>
 
-        {/* Aspect Ratio Selection Modal */}
-        <Portal>
-          <Modal
-            visible={aspectRatioModalVisible}
-            onDismiss={() => setAspectRatioModalVisible(false)}
-            contentContainerStyle={styles.aspectRatioModal}
-          >
-            <Card style={styles.aspectRatioCard}>
-              <Card.Content>
-                <Text style={styles.aspectRatioTitle}>Choose Image Aspect Ratio</Text>
-                <Text style={styles.aspectRatioSubtitle}>
-                  Select the aspect ratio for your product image
-                </Text>
-                
-                <RadioButton.Group
-                  onValueChange={setSelectedAspectRatio}
-                  value={selectedAspectRatio}
-                >
-                  {ASPECT_RATIOS.map((ratio) => (
-                    <View key={ratio.value} style={styles.aspectRatioOption}>
-                      <View style={styles.aspectRatioInfo}>
-                        <Text style={styles.aspectRatioLabel}>{ratio.label}</Text>
-                        <Text style={styles.aspectRatioDescription}>{ratio.description}</Text>
-                      </View>
-                      <RadioButton value={ratio.value} />
-                    </View>
-                  ))}
-                </RadioButton.Group>
-
-                <View style={styles.aspectRatioActions}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => setAspectRatioModalVisible(false)}
-                    style={styles.aspectRatioCancelButton}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={selectedImageForCrop?.action === 'recrop' ? handleRecrop : handleAspectRatioSelection}
-                    style={styles.aspectRatioConfirmButton}
-                  >
-                    Continue
-                  </Button>
-                </View>
-              </Card.Content>
-            </Card>
-          </Modal>
-        </Portal>
-
-        {/* Custom Crop Modal */}
-        <Portal>
-          <Modal
-            visible={cropModalVisible}
-            onDismiss={() => setCropModalVisible(false)}
-            contentContainerStyle={styles.cropModal}
-          >
-            <Card style={styles.cropCard}>
-              <Card.Content>
-                <Text style={styles.cropTitle}>Custom Crop</Text>
-                {selectedImageForCrop?.uri && (
-                  <View style={styles.cropImageContainer}>
-                    <Image
-                      source={{ uri: selectedImageForCrop.uri }}
-                      style={styles.cropPreviewImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                )}
-                
-                <View style={styles.cropActions}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => setCropModalVisible(false)}
-                    style={styles.cropCancelButton}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={handleCustomCrop}
-                    style={styles.cropConfirmButton}
-                  >
-                    Apply Crop
-                  </Button>
-                </View>
-              </Card.Content>
-            </Card>
-          </Modal>
-        </Portal>
-
         {/* Fullscreen Image Modal */}
-        <Modal visible={!!fullscreenImage} transparent animationType="fade">
+        <Modal visible={!!fullscreenImage} transparent animationType="fade" statusBarTranslucent presentationStyle="overFullScreen">
           <Pressable style={styles.modalOverlay} onPress={() => setFullscreenImage(null)}>
             <View style={styles.modalContent}>
               <IconButton
@@ -910,7 +542,6 @@ export default function ProductFormScreen({ navigation, route }) {
           </Pressable>
         </Modal>
         <ImagePickerModal visible={imagePickerVisible} onDismiss={() => setImagePickerVisible(false)} onPickImage={handleImagePick} />
-        <ImageCropModal visible={imageCropVisible} onDismiss={() => setImageCropVisible(false)} imageUri={selectedImage?.uri} onCropComplete={handleImageCrop} />
       </ScrollView>
     </KeyboardAvoidingView>
   )

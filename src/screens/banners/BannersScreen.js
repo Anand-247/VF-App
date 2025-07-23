@@ -9,14 +9,13 @@ import {
   Modal, 
   Dimensions, 
   TouchableOpacity,
-  ScrollView 
+  Platform // Added Platform for platform-specific shadows
 } from "react-native"
 import { 
   Text, 
   Card, 
   FAB, 
   Searchbar, 
-  Menu, 
   IconButton, 
   Chip,
   Button 
@@ -36,7 +35,6 @@ export default function BannersScreen({ navigation }) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [menuVisible, setMenuVisible] = useState({})
   const [imageViewerVisible, setImageViewerVisible] = useState(false)
   const [selectedBanner, setSelectedBanner] = useState(null)
 
@@ -88,7 +86,7 @@ export default function BannersScreen({ navigation }) {
   const handleDelete = (banner) => {
     Alert.alert(
       "Delete Banner", 
-      `Are you sure you want to delete "${banner.title}"?`, 
+      `Are you sure you want to delete "${banner.title}"? This action cannot be undone.`, 
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -109,7 +107,8 @@ export default function BannersScreen({ navigation }) {
           text1: "Success",
           text2: "Banner deleted successfully",
         })
-        loadBanners()
+        setBanners((prev) => prev.filter((banner) => banner._id !== id))
+        setFilteredBanners((prev) => prev.filter((banner) => banner._id !== id))
       }
     } catch (error) {
       console.error("Error deleting banner:", error)
@@ -119,13 +118,6 @@ export default function BannersScreen({ navigation }) {
         text2: "Failed to delete banner",
       })
     }
-  }
-
-  const toggleMenu = (id) => {
-    setMenuVisible((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }))
   }
 
   const openImageViewer = (banner) => {
@@ -179,6 +171,18 @@ export default function BannersScreen({ navigation }) {
               <Text style={styles.imageViewerDescription}>
                 {selectedBanner.description}
               </Text>
+              {selectedBanner?.link && (
+                <View style={styles.imageViewerLinkContainer}>
+                  <MaterialCommunityIcons 
+                    name="link-variant" 
+                    size={16} 
+                    color={theme.colors.primary} 
+                  />
+                  <Text style={styles.imageViewerLinkText}>
+                    Has Link
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -187,139 +191,125 @@ export default function BannersScreen({ navigation }) {
   )
 
   const BannerCard = ({ item }) => (
-    <Card style={styles.card} elevation={3}>
-      <TouchableOpacity style={styles.imageContainer} onPress={() => openImageViewer(item)}>
-        <Card.Cover 
-          source={{ 
-            uri: item.image?.url || "https://via.placeholder.com/400x200?text=No+Image" 
-          }} 
-          style={styles.cardImage} 
-        />
-        
-        {/* Status badge */}
-        <View style={styles.statusBadge}>
-          <View style={[
-            styles.statusIndicator,
-            { backgroundColor: item.isActive ? theme.colors.success : theme.colors.error }
-          ]} />
-          <Text style={styles.statusBadgeText}>
-            {item.isActive ? "Active" : "Inactive"}
-          </Text>
-        </View>
+    <Card style={styles.card} elevation={2}>
+      <TouchableOpacity style={styles.cardTouchable} onPress={() => openImageViewer(item)}>
+        <View style={styles.imageContainer}>
+          <Card.Cover
+            source={
+              item.image?.url
+                ? { uri: item.image.url }
+                : require('../../../assets/imagePlaceholder.jpg')
+            }
+            style={styles.cardImage}
+          />
+          
+          {/* Status badge */}
+          <View style={styles.statusBadge}>
+            <View style={[
+              styles.statusIndicator,
+              { backgroundColor: item.isActive ? theme.colors.success : theme.colors.error }
+            ]} />
+            <Text style={styles.statusBadgeText}>
+              {item.isActive ? "Active" : "Inactive"}
+            </Text>
+          </View>
 
-        {/* Link indicator */}
-        {item.link && (
-          <View style={styles.linkBadge}>
-            <MaterialCommunityIcons 
-              name="link" 
-              size={12} 
-              color={theme.colors.onSecondary} 
+          {/* Link indicator */}
+          {item.link && (
+            <View style={styles.linkBadge}>
+              <MaterialCommunityIcons 
+                name="link-variant" 
+                size={14} 
+                color={theme.colors.onSecondary} 
+              />
+            </View>
+          )}
+
+          {/* Action buttons on top right of image */}
+          <View style={styles.cardImageActions}>
+            <IconButton
+              icon="pencil"
+              size={20}
+              iconColor={theme.colors.onSurfaceVariant}
+              containerColor={theme.colors.surface}
+              onPress={() => navigation.navigate("BannerForm", { banner: item })}
+              style={styles.imageActionButton}
+              rippleColor={theme.colors.primaryContainer}
+            />
+            <IconButton
+              icon="delete"
+              size={20}
+              iconColor={theme.colors.error}
+              containerColor={theme.colors.surface}
+              onPress={() => handleDelete(item)}
+              style={styles.imageActionButton}
+              rippleColor={theme.colors.errorContainer}
             />
           </View>
-        )}
-      </TouchableOpacity>
-
-      <Card.Content style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardInfo}>
-            {/* Title and menu */}
-            <View style={styles.titleRow}>
-              <Text style={styles.bannerTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Menu
-                visible={menuVisible[item._id]}
-                onDismiss={() => toggleMenu(item._id)}
-                anchor={
-                  <IconButton 
-                    icon="dots-vertical" 
-                    size={20} 
-                    iconColor={theme.colors.onSurfaceVariant}
-                    onPress={() => toggleMenu(item._id)} 
-                  />
-                }
-              >
-                <Menu.Item
-                  onPress={() => {
-                    toggleMenu(item._id)
-                    navigation.navigate("BannerForm", { banner: item })
-                  }}
-                  title="Edit"
-                  leadingIcon="pencil"
-                />
-                <Menu.Item
-                  onPress={() => {
-                    toggleMenu(item._id)
-                    handleDelete(item)
-                  }}
-                  title="Delete"
-                  leadingIcon="delete"
-                />
-              </Menu>
-            </View>
-
-            {/* Description */}
-            <Text style={styles.bannerDescription} numberOfLines={3}>
-              {item.description || "No description available"}
-            </Text>
-
-            {/* Bottom info */}
-            <View style={styles.bottomRow}>
-              <View style={styles.infoContainer}>
-                {item.link && (
-                  <View style={styles.linkContainer}>
-                    <MaterialCommunityIcons 
-                      name="link-variant" 
-                      size={14} 
-                      color={theme.colors.secondary} 
-                    />
-                    <Text style={styles.linkText}>Has Link</Text>
-                  </View>
-                )}
-                
-                {item.createdAt && (
-                  <View style={styles.dateContainer}>
-                    <MaterialCommunityIcons 
-                      name="calendar" 
-                      size={14} 
-                      color={theme.colors.onSurfaceVariant} 
-                    />
-                    <Text style={styles.dateText}>
-                      {new Date(item.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <Chip 
-                mode="outlined"
-                compact
-                style={[
-                  styles.statusChip,
-                  { 
-                    backgroundColor: item.isActive 
-                      ? theme.colors.success + '20' 
-                      : theme.colors.error + '20',
-                    borderColor: item.isActive 
-                      ? theme.colors.success 
-                      : theme.colors.error
-                  }
-                ]}
-                textStyle={[
-                  styles.statusChipText,
-                  { 
-                    color: item.isActive 
-                      ? theme.colors.success 
-                      : theme.colors.error 
-                  }
-                ]}
-              >
-                {item.isActive ? "Active" : "Inactive"}
-              </Chip>
-            </View>
-          </View>
         </View>
-      </Card.Content>
+
+        <Card.Content style={styles.cardContent}>
+          <Text style={styles.bannerTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+
+          <Text style={styles.bannerDescription} numberOfLines={3}>
+            {item.description || "No description available"}
+          </Text>
+
+          {/* Bottom info: Date and Status */}
+          <View style={styles.bottomInfoRow}>
+            <View style={styles.leftInfo}>
+              {item.link && (
+                <View style={styles.linkContainer}>
+                  <MaterialCommunityIcons 
+                    name="link-variant" 
+                    size={14} 
+                    color={theme.colors.secondary} 
+                  />
+                  <Text style={styles.linkText}>Has Link</Text>
+                </View>
+              )}
+              
+              {item.createdAt && (
+                <View style={styles.dateContainer}>
+                  <MaterialCommunityIcons 
+                    name="calendar-month-outline" 
+                    size={14} 
+                    color={theme.colors.onSurfaceVariant} 
+                  />
+                  <Text style={styles.dateText}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Chip 
+              mode="flat"
+              compact
+              style={[
+                styles.statusChip,
+                { 
+                  backgroundColor: item.isActive 
+                    ? theme.colors.success + '20' 
+                    : theme.colors.error + '20',
+                }
+              ]}
+              textStyle={[
+                styles.statusChipText,
+                { 
+                  color: item.isActive 
+                    ? theme.colors.success 
+                    : theme.colors.error 
+                }
+              ]}
+            >
+              {item.isActive ? "Active" : "Inactive"}
+            </Chip>
+          </View>
+        </Card.Content>
+      </TouchableOpacity>
     </Card>
   )
 
@@ -336,6 +326,7 @@ export default function BannersScreen({ navigation }) {
           value={searchQuery}
           style={styles.searchbar}
           iconColor={theme.colors.primary}
+          theme={{ colors: { onSurfaceVariant: theme.colors.onSurfaceVariant } }}
         />
       </View>
 
@@ -410,31 +401,51 @@ const styles = StyleSheet.create({
   searchbar: {
     backgroundColor: theme.colors.surfaceVariant,
     elevation: 0,
-    borderRadius: theme.roundness * 2
+    borderRadius: theme.roundness * 2,
+    borderWidth: 1,
+    borderColor: theme.colors.outline + '40',
   },
   listContainer: {
     padding: spacing.md,
     paddingBottom: 100,
   },
   
-  // Enhanced card styles
+  // --- Banner Card Styles ---
   card: {
     marginBottom: spacing.lg,
-    backgroundColor: theme.colors.surface,
-    ...shadows.medium,
-    borderRadius: theme.roundness * 2,
+    borderRadius: theme.roundness * 2.5, // Slightly more rounded for softness
     overflow: "hidden",
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.outline + '15'
+    borderColor: theme.colors.outlineVariant,
+    // Modern, subtle shadow
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 5, // Android elevation
+      },
+    }),
   },
-  
+  cardTouchable: { // Wrapper for the entire card content to make it fully touchable
+    flex: 1,
+  },
   imageContainer: {
-    position: 'relative'
+    position: 'relative',
+    height: 180, // Fixed height for consistency
+    borderTopLeftRadius: theme.roundness * 2,
+    borderTopRightRadius: theme.roundness * 2,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceVariant, // Placeholder background
   },
-  
   cardImage: {
-    height: 160,
-    backgroundColor: theme.colors.surfaceVariant
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover', // Ensures image covers the area
   },
   
   statusBadge: {
@@ -447,39 +458,18 @@ const styles = StyleSheet.create({
     borderRadius: theme.roundness * 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.small
+    gap: spacing.xs / 2, // Small gap for icon and text
+    ...shadows.small,
   },
-  
   statusIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: spacing.xs
   },
-  
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     color: theme.colors.onSurface
-  },
-  
-  viewButton: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: theme.colors.primary + 'CC', // 80% opacity
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: theme.roundness * 2,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  
-  viewButtonText: {
-    color: theme.colors.onPrimary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4
   },
   
   linkBadge: {
@@ -487,95 +477,104 @@ const styles = StyleSheet.create({
     bottom: spacing.sm,
     right: spacing.sm,
     backgroundColor: theme.colors.secondary,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32, // Slightly larger
+    height: 32,
+    borderRadius: 16, // Circular
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    ...shadows.small,
+  },
+
+  cardImageActions: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  imageActionButton: {
+    margin: 0, // Override default margin
+    borderRadius: theme.roundness * 1.5,
+    // More pronounced shadow for actions on image
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   
   cardContent: {
-    padding: spacing.lg,
-  },
-  
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  
-  cardInfo: {
-    flex: 1,
-  },
-  
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm
+    padding: spacing.lg, // Consistent padding inside content area
   },
   
   bannerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: '700',
     color: theme.colors.onSurface,
-    lineHeight: 24,
-    flex: 1,
-    marginRight: spacing.sm
+    lineHeight: 26,
+    marginBottom: spacing.xs,
   },
   
   bannerDescription: {
     fontSize: 14,
     color: theme.colors.onSurfaceVariant,
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: spacing.md,
   },
   
-  bottomRow: {
+  bottomInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end'
+    alignItems: 'flex-end',
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.outlineVariant,
   },
   
-  infoContainer: {
+  leftInfo: {
     flex: 1,
-    marginRight: spacing.sm
+    marginRight: spacing.sm,
   },
   
   linkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs
+    gap: spacing.xs, // Gap for icon and text
+    marginBottom: spacing.xs,
   },
-  
   linkText: {
     fontSize: 12,
     color: theme.colors.secondary,
     fontWeight: '500',
-    marginLeft: spacing.xs
   },
   
   dateContainer: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    gap: spacing.xs, // Gap for icon and text
   },
-  
   dateText: {
-    fontSize: 11,
+    fontSize: 12,
     color: theme.colors.onSurfaceVariant,
-    marginLeft: spacing.xs
   },
   
   statusChip: {
-    alignSelf: 'flex-end'
+    borderRadius: theme.roundness,
+    borderColor: 'transparent',
   },
-  
   statusChipText: {
-    fontSize: 10,
-    fontWeight: '600'
+    fontSize: 11,
+    fontWeight: '600',
   },
   
-  // Empty state styles
+  // --- Empty State Styles ---
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -583,7 +582,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl * 2,
     paddingHorizontal: spacing.lg
   },
-  
   emptyIconContainer: {
     width: 120,
     height: 120,
@@ -593,7 +591,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.lg
   },
-  
   emptyText: {
     fontSize: 20,
     fontWeight: "700",
@@ -601,7 +598,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     textAlign: 'center'
   },
-  
   emptySubtext: {
     fontSize: 14,
     color: theme.colors.onSurfaceVariant,
@@ -609,12 +605,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: spacing.lg
   },
-  
   emptyButton: {
     marginTop: spacing.md,
     backgroundColor: theme.colors.primary
   },
   
+  // --- FAB Styles ---
   fab: {
     position: "absolute",
     margin: spacing.lg,
@@ -624,13 +620,12 @@ const styles = StyleSheet.create({
     borderRadius: theme.roundness * 2
   },
 
-  // Image Viewer Styles
+  // --- Image Viewer Styles ---
   imageViewerContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
     justifyContent: 'center'
   },
-  
   imageViewerHeader: {
     position: 'absolute',
     top: 50,
@@ -642,7 +637,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     zIndex: 1
   },
-  
   imageViewerTitle: {
     color: theme.colors.onPrimary,
     fontSize: 18,
@@ -650,27 +644,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.md
   },
-  
   imageViewerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg
   },
-  
   imageViewerImageContainer: {
     width: screenWidth - spacing.xl,
     height: screenHeight * 0.6,
     justifyContent: 'center',
     alignItems: 'center'
   },
-  
   imageViewerImage: {
     width: '100%',
     height: '100%',
     backgroundColor: 'transparent'
   },
-  
   imageViewerInfo: {
     position: 'absolute',
     bottom: 100,
@@ -681,11 +671,22 @@ const styles = StyleSheet.create({
     borderRadius: theme.roundness * 2,
     ...shadows.large
   },
-  
   imageViewerDescription: {
     color: theme.colors.onSurface,
     fontSize: 14,
     lineHeight: 20,
-    textAlign: 'center'
+    textAlign: 'center',
+    marginBottom: spacing.md
+  },
+  imageViewerLinkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  imageViewerLinkText: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: '500'
   }
 })

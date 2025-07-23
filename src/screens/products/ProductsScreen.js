@@ -1,5 +1,5 @@
 "use client"
-import { useState, useCallback, useEffect } from "react"
+import React, { useState, useCallback, useEffect } from "react"
 import { 
   View, 
   StyleSheet, 
@@ -9,7 +9,8 @@ import {
   Modal, 
   Dimensions, 
   TouchableOpacity,
-  ScrollView 
+  ScrollView,
+  Platform
 } from "react-native"
 import { 
   Text, 
@@ -38,10 +39,10 @@ export default function ProductsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
-  const [menuVisible, setMenuVisible] = useState({})
   const [imageViewerVisible, setImageViewerVisible] = useState(false)
   const [selectedImages, setSelectedImages] = useState([])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [selectedProduct, setSelectedProduct] = useState(null)
 
   useFocusEffect(
     useCallback(() => {
@@ -111,7 +112,7 @@ export default function ProductsScreen({ navigation }) {
   const handleDelete = (product) => {
     Alert.alert(
       "Delete Product",
-      `Are you sure you want to delete "${product.name}"?`,
+      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -132,7 +133,8 @@ export default function ProductsScreen({ navigation }) {
           text1: "Success",
           text2: "Product deleted successfully",
         })
-        loadData()
+        setProducts((prev) => prev.filter((product) => product._id !== id))
+        setFilteredProducts((prev) => prev.filter((product) => product._id !== id))
       }
     } catch (error) {
       console.error("Error deleting product:", error)
@@ -144,15 +146,9 @@ export default function ProductsScreen({ navigation }) {
     }
   }
 
-  const toggleMenu = (id) => {
-    setMenuVisible((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }))
-  }
-
-  const openImageViewer = (images, index = 0) => {
-    setSelectedImages(images || [])
+  const openImageViewer = (product, index = 0) => {
+    setSelectedProduct(product)
+    setSelectedImages(product.images || [])
     setCurrentImageIndex(index)
     setImageViewerVisible(true)
   }
@@ -161,137 +157,82 @@ export default function ProductsScreen({ navigation }) {
     setImageViewerVisible(false)
     setSelectedImages([])
     setCurrentImageIndex(0)
+    setSelectedProduct(null)
   }
 
-  const ImageViewer = () => (
-    <Modal
-      visible={imageViewerVisible}
-      transparent={true}
-      statusBarTranslucent={true}
-      presentationStyle="overFullScreen"
-      animationType="fade"
-      onRequestClose={closeImageViewer}
-    >
-      <View style={styles.imageViewerContainer}>
-        <View style={styles.imageViewerHeader}>
-          <Text style={styles.imageCounter}>
-            {currentImageIndex + 1} / {selectedImages.length}
-          </Text>
-          <IconButton
-            icon="close"
-            iconColor={theme.colors.onPrimary}
-            size={24}
-            onPress={closeImageViewer}
-          />
-        </View>
-        
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth)
-            setCurrentImageIndex(index)
-          }}
-          contentOffset={{ x: currentImageIndex * screenWidth, y: 0 }}
-        >
-          {selectedImages.map((image, index) => (
-            <View key={index} style={styles.imageViewerSlide}>
-              <TouchableOpacity
-                style={styles.imageViewerImageContainer}
-                activeOpacity={1}
-              >
-                <Card.Cover
-                  source={{ uri: image.url }}
-                  style={styles.imageViewerImage}
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.imageViewerDots}>
-          {selectedImages.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                index === currentImageIndex && styles.activeDot
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-    </Modal>
-  )
+  
 
   const ProductCard = ({ item }) => (
-    <Card style={styles.card} elevation={3}>
-      <TouchableOpacity style={styles.imageContainer} onPress={() => openImageViewer(item.images, 0)}>
-        <Card.Cover
-          source={{ 
-            uri: item.images?.[0]?.url || 'https://via.placeholder.com/300x200?text=No+Image' 
-          }}
-          style={styles.cardImage}
-        />
-        
-        {/* Image count indicator */}
-        {item.images && item.images.length > 1 && (
-          <View style={styles.imageCountBadge}>
-            <MaterialCommunityIcons 
-              name="image-multiple" 
-              size={12} 
-              color={theme.colors.onPrimary} 
-            />
-            <Text style={styles.imageCountText}>{item.images.length}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+    <Card style={styles.card} elevation={2}>
+      <TouchableOpacity style={styles.cardTouchable} onPress={() => openImageViewer(item, 0)}>
+        <View style={styles.imageContainer}>
+          <Card.Cover
+            source={
+              item.images?.[0]?.url
+                ? { uri: item.images?.[0]?.url }
+                : require('../../../assets/imagePlaceholder.jpg')
+            }
+            style={styles.cardImage}
+          />
+          
+          {/* Image count indicator */}
+          {item.images && item.images.length > 1 && (
+            <View style={styles.imageCountBadge}>
+              <MaterialCommunityIcons 
+                name="image-multiple" 
+                size={12} 
+                color={theme.colors.onPrimary} 
+              />
+              <Text style={styles.imageCountText}>{item.images.length}</Text>
+            </View>
+          )}
 
-      <Card.Content style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardInfo}>
-            {/* Product name and menu */}
-            <View style={styles.titleRow}>
+          {/* Stock status badge */}
+          {item.stock !== undefined && (
+            <View style={[
+              styles.stockBadge, 
+              { backgroundColor: item.stock > 0 ? theme.colors.success : theme.colors.error }
+            ]}>
+              <MaterialCommunityIcons 
+                name={item.stock > 0 ? "check-circle" : "alert-circle"} 
+                size={12} 
+                color={theme.colors.onPrimary} 
+              />
+            </View>
+          )}
+
+          {/* Action buttons */}
+          <View style={styles.cardImageActions}>
+            <IconButton
+              icon="pencil"
+              size={20}
+              iconColor={theme.colors.onSurfaceVariant}
+              containerColor={theme.colors.surface}
+              onPress={() => navigation.navigate("ProductForm", { product: item })}
+              style={styles.imageActionButton}
+              rippleColor={theme.colors.primaryContainer}
+            />
+            <IconButton
+              icon="delete"
+              size={20}
+              iconColor={theme.colors.error}
+              containerColor={theme.colors.surface}
+              onPress={() => handleDelete(item)}
+              style={styles.imageActionButton}
+              rippleColor={theme.colors.errorContainer}
+            />
+          </View>
+        </View>
+
+        <Card.Content style={styles.cardContent}>
+          <View>
+            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+              {/* Product name */}
               <Text style={styles.productName} numberOfLines={2}>
                 {item.name}
               </Text>
-              <Menu
-                visible={menuVisible[item._id]}
-                onDismiss={() => toggleMenu(item._id)}
-                anchor={
-                  <IconButton 
-                    icon="dots-vertical" 
-                    size={20}
-                    iconColor={theme.colors.onSurfaceVariant}
-                    onPress={() => toggleMenu(item._id)} 
-                  />
-                }
-              >
-                <Menu.Item 
-                  onPress={() => { 
-                    toggleMenu(item._id); 
-                    navigation.navigate("ProductForm", { product: item }) 
-                  }} 
-                  title="Edit"
-                  leadingIcon="pencil"
-                />
-                <Menu.Item 
-                  onPress={() => { 
-                    toggleMenu(item._id); 
-                    handleDelete(item) 
-                  }} 
-                  title="Delete"
-                  leadingIcon="delete"
-                />
-              </Menu>
-            </View>
-
-            {/* Category chip */}
-            <View style={styles.categoryContainer}>
               <Chip 
-                mode="outlined" 
+                mode="flat" 
                 compact 
                 style={styles.categoryChip}
                 textStyle={styles.categoryChipText}
@@ -299,40 +240,57 @@ export default function ProductsScreen({ navigation }) {
                 {item.category?.name || "Uncategorized"}
               </Chip>
             </View>
+          </View>
 
-            {/* Description */}
-            <Text style={styles.productDescription} numberOfLines={3}>
-              {item.description}
-            </Text>
+          {/* Category chip */}
+          
 
-            {/* Price and stock info */}
-            <View style={styles.bottomRow}>
-              <View style={styles.priceContainer}>
-                <Text style={styles.price}>₹{item.price?.toLocaleString()}</Text>
-                {item.originalPrice && item.originalPrice > item.price && (
-                  <Text style={styles.originalPrice}>₹{item.originalPrice?.toLocaleString()}</Text>
-                )}
-              </View>
-              
-              {item.stock !== undefined && (
-                <View style={styles.stockContainer}>
-                  <MaterialCommunityIcons 
-                    name="package-variant" 
-                    size={14} 
-                    color={item.stock > 0 ? theme.colors.success : theme.colors.error} 
-                  />
-                  <Text style={[
-                    styles.stockText,
-                    { color: item.stock > 0 ? theme.colors.success : theme.colors.error }
-                  ]}>
-                    {item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}
-                  </Text>
-                </View>
+          {/* Description */}
+          <Text style={styles.productDescription} numberOfLines={3}>
+            {item.description || "No description available"}
+          </Text>
+
+          {/* Price and stock info */}
+          <View style={styles.bottomRow}>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>₹{item.price?.toLocaleString()}</Text>
+              {item.originalPrice && item.originalPrice > item.price && (
+                <Text style={styles.originalPrice}>₹{item.originalPrice?.toLocaleString()}</Text>
               )}
             </View>
+            
+            {item.stock !== undefined && (
+              <View style={styles.stockContainer}>
+                <MaterialCommunityIcons 
+                  name="package-variant" 
+                  size={14} 
+                  color={item.stock > 0 ? theme.colors.success : theme.colors.error} 
+                />
+                <Text style={[
+                  styles.stockText,
+                  { color: item.stock > 0 ? theme.colors.success : theme.colors.error }
+                ]}>
+                  {item.stock > 0 ? `${item.stock}` : 'Out'}
+                </Text>
+              </View>
+            )}
           </View>
-        </View>
-      </Card.Content>
+
+          {/* Date added */}
+          {item.createdAt && (
+            <View style={styles.dateContainer}>
+              <MaterialCommunityIcons
+                name="calendar-month-outline"
+                size={12}
+                color={theme.colors.onSurfaceVariant}
+              />
+              <Text style={styles.dateText}>
+                Added {new Date(item.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+          )}
+        </Card.Content>
+      </TouchableOpacity>
     </Card>
   )
 
@@ -347,8 +305,14 @@ export default function ProductsScreen({ navigation }) {
           value={searchQuery}
           style={styles.searchbar}
           iconColor={theme.colors.primary}
+          theme={{ colors: { onSurfaceVariant: theme.colors.onSurfaceVariant } }}
         />
-        <View style={styles.categoryFilters}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.categoryFilters}
+          contentContainerStyle={styles.categoryFiltersContent}
+        >
           <Chip 
             selected={selectedCategory === "all"} 
             onPress={() => handleCategoryFilter("all")} 
@@ -361,7 +325,7 @@ export default function ProductsScreen({ navigation }) {
               selectedCategory === "all" && styles.selectedCategoryText
             ]}
           >
-            All
+            All Products
           </Chip>
           {categories.map((c) => (
             <Chip 
@@ -380,7 +344,7 @@ export default function ProductsScreen({ navigation }) {
               {c.name}
             </Chip>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       <FlatList
@@ -397,6 +361,34 @@ export default function ProductsScreen({ navigation }) {
         }
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <MaterialCommunityIcons
+                name="package-variant-closed"
+                size={64}
+                color={theme.colors.primary + '60'}
+              />
+            </View>
+            <Text style={styles.emptyText}>No products found</Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery || selectedCategory !== "all"
+                ? "Try adjusting your search or filters"
+                : "Add your first product to get started"
+              }
+            </Text>
+            {!searchQuery && selectedCategory === "all" && (
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate("ProductForm")}
+                style={styles.emptyButton}
+                icon="plus"
+              >
+                Add Product
+              </Button>
+            )}
+          </View>
+        }
       />
 
       <FAB 
@@ -406,10 +398,92 @@ export default function ProductsScreen({ navigation }) {
         color={theme.colors.onPrimary}
       />
 
-      <ImageViewer />
+      <ImageViewer
+        visible={imageViewerVisible}
+        onClose={closeImageViewer}
+        images={selectedImages}
+        initialIndex={currentImageIndex}
+        product={selectedProduct}
+      />
     </View>
   )
 }
+
+const ImageViewer = React.memo(({ visible, images = [], initialIndex = 0, onClose, product }) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const scrollViewRef = React.useRef();
+
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(initialIndex);
+
+      // Scroll only after the view is rendered (in next tick)
+      setTimeout(() => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ x: initialIndex * screenWidth, animated: false });
+        }
+      }, 0);
+    }
+  }, [visible, initialIndex]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      statusBarTranslucent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.imageViewerContainer}>
+        {/* Top header */}
+        <View style={styles.imageViewerHeader}>
+          <View style={styles.imageViewerHeaderLeft}>
+            <Text style={styles.imageViewerTitle}>{product?.name}</Text>
+            <Text style={styles.imageCounter}>
+              {currentIndex + 1} / {images.length}
+            </Text>
+          </View>
+          <IconButton
+            icon="close"
+            iconColor={theme.colors.onPrimary}
+            size={24}
+            onPress={onClose}
+          />
+        </View>
+
+        {/* Scrollable images */}
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+            setCurrentIndex(index);
+          }}
+        >
+          {images.map((img, index) => (
+            <View key={index} style={styles.imageViewerSlide}>
+              <TouchableOpacity activeOpacity={1} style={styles.imageViewerImageContainer}>
+                <Card.Cover
+                  source={{ uri: img.url }}
+                  style={styles.imageViewerImage}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+
+        {/* Optional: Dots or info */}
+        {/* {images.length > 1 && (...)} */}
+      </View>
+    </Modal>
+  );
+});
+
 
 const styles = StyleSheet.create({
   container: { 
@@ -427,18 +501,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceVariant, 
     marginBottom: spacing.md,
     elevation: 0,
-    borderRadius: theme.roundness * 2
+    borderRadius: theme.roundness * 2,
+    borderWidth: 1,
+    borderColor: theme.colors.outline + '40',
   },
   categoryFilters: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
     marginBottom: spacing.sm 
   },
+  categoryFiltersContent: {
+    paddingRight: spacing.md,
+  },
   categoryFilterChip: { 
-    marginRight: spacing.sm, 
-    marginBottom: spacing.xs,
+    marginRight: spacing.sm,
     backgroundColor: theme.colors.surfaceVariant,
-    borderColor: theme.colors.outline
+    borderColor: theme.colors.outline + '40',
+    borderWidth: 1,
   },
   selectedCategoryChip: {
     backgroundColor: theme.colors.primaryContainer,
@@ -461,22 +538,41 @@ const styles = StyleSheet.create({
   // Enhanced card styles
   card: { 
     marginBottom: spacing.lg, 
-    borderRadius: theme.roundness * 2, 
+    borderRadius: theme.roundness * 2.5, 
     overflow: "hidden", 
     backgroundColor: theme.colors.surface, 
-    ...shadows.medium,
     borderWidth: 1,
-    borderColor: theme.colors.outline + '15'
+    borderColor: theme.colors.outlineVariant,
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  
+  cardTouchable: {
+    flex: 1,
   },
   
   imageContainer: {
-    position: 'relative'
+    position: 'relative',
+    height: 220,
+    borderTopLeftRadius: theme.roundness * 2,
+    borderTopRightRadius: theme.roundness * 2,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceVariant,
   },
   
   cardImage: { 
     width: '100%', 
-    height: 240, 
-    backgroundColor: theme.colors.surfaceVariant
+    height: '100%',
+    resizeMode: 'cover',
   },
   
   imageCountBadge: {
@@ -488,62 +584,64 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: theme.roundness * 1.5,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+    ...shadows.small,
   },
   
   imageCountText: {
     color: theme.colors.onPrimary,
     fontSize: 10,
     fontWeight: '600',
-    marginLeft: 2
   },
   
-  viewButton: {
+  stockBadge: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: theme.colors.primary + 'CC', // 80% opacity
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: theme.roundness * 2,
-    flexDirection: 'row',
-    alignItems: 'center'
+    bottom: spacing.sm,
+    left: spacing.sm,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.small,
   },
   
-  viewButtonText: {
-    color: theme.colors.onPrimary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4
+  cardImageActions: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  
+  imageActionButton: {
+    margin: 0,
+    borderRadius: theme.roundness * 1.5,
+    ...Platform.select({
+      ios: {
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   
   cardContent: { 
     padding: spacing.lg 
   },
   
-  cardHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
-  },
-  
-  cardInfo: { 
-    flex: 1 
-  },
-  
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm
-  },
-  
   productName: { 
+    flex: 1,
     fontSize: 18, 
     fontWeight: '700', 
     color: theme.colors.onSurface, 
-    lineHeight: 24,
-    flex: 1,
-    marginRight: spacing.sm
+    lineHeight: 26,
+    marginBottom: spacing.xs,
   },
   
   categoryContainer: {
@@ -553,7 +651,7 @@ const styles = StyleSheet.create({
   categoryChip: {
     backgroundColor: theme.colors.primaryContainer,
     alignSelf: 'flex-start',
-    borderColor: theme.colors.primary + '30'
+    borderColor: 'transparent',
   },
   
   categoryChipText: {
@@ -565,14 +663,18 @@ const styles = StyleSheet.create({
   productDescription: { 
     fontSize: 14, 
     color: theme.colors.onSurfaceVariant, 
-    lineHeight: 20, 
+    lineHeight: 22, 
     marginBottom: spacing.md
   },
   
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end'
+    alignItems: 'flex-end',
+    marginBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.outlineVariant,
   },
   
   priceContainer: { 
@@ -582,7 +684,7 @@ const styles = StyleSheet.create({
   },
   
   price: { 
-    fontSize: 22, 
+    fontSize: 24, 
     fontWeight: '800', 
     color: theme.colors.primary,
     marginRight: spacing.sm
@@ -600,13 +702,61 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceVariant,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: theme.roundness
+    borderRadius: theme.roundness,
   },
   
   stockText: {
     fontSize: 12,
     marginLeft: spacing.xs,
-    fontWeight: '500'
+    fontWeight: '600'
+  },
+
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  
+  dateText: {
+    fontSize: 11,
+    color: theme.colors.onSurfaceVariant,
+    fontStyle: 'italic',
+  },
+  
+  // Empty state styles
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: spacing.xxl * 2,
+    paddingHorizontal: spacing.lg
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: theme.colors.primaryContainer,
+    justifyColor: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: theme.colors.onSurface,
+    marginBottom: spacing.sm,
+    textAlign: 'center'
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: spacing.lg
+  },
+  emptyButton: {
+    marginTop: spacing.md,
+    backgroundColor: theme.colors.primary
   },
   
   fab: { 
@@ -631,15 +781,27 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     zIndex: 1
   },
   
-  imageCounter: {
+  imageViewerHeaderLeft: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  
+  imageViewerTitle: {
     color: theme.colors.onPrimary,
-    fontSize: 16,
-    fontWeight: '600'
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  
+  imageCounter: {
+    color: theme.colors.onPrimary + 'CC',
+    fontSize: 14,
+    fontWeight: '500'
   },
   
   imageViewerSlide: {
@@ -651,7 +813,7 @@ const styles = StyleSheet.create({
   
   imageViewerImageContainer: {
     width: screenWidth - spacing.xl,
-    height: screenHeight * 0.7,
+    height: screenHeight * 0.6,
     justifyContent: 'center',
     alignItems: 'center'
   },
@@ -664,7 +826,7 @@ const styles = StyleSheet.create({
   
   imageViewerDots: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 200,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -685,5 +847,74 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5
-  }
+  },
+
+  imageViewerInfo: {
+    position: 'absolute',
+    bottom: 50,
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: theme.colors.surface + 'F0', // 94% opacity
+    padding: spacing.lg,
+    borderRadius: theme.roundness * 2,
+    ...shadows.large
+  },
+
+  imageViewerPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: spacing.sm,
+  },
+
+  imageViewerPrice: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: theme.colors.primary,
+    marginRight: spacing.sm,
+  },
+
+  imageViewerOriginalPrice: {
+    fontSize: 18,
+    color: theme.colors.onSurfaceVariant,
+    textDecorationLine: 'line-through'
+  },
+
+  imageViewerDescription: {
+    color: theme.colors.onSurface,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: spacing.md
+  },
+
+  imageViewerMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  imageViewerCategoryChip: {
+    backgroundColor: theme.colors.primaryContainer,
+    borderColor: 'transparent',
+  },
+
+  imageViewerCategoryText: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    fontWeight: '600'
+  },
+
+  imageViewerStockContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceVariant,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: theme.roundness,
+  },
+
+  imageViewerStockText: {
+    fontSize: 12,
+    marginLeft: spacing.xs,
+    fontWeight: '600'
+  },
 })

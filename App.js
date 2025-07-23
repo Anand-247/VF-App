@@ -13,29 +13,15 @@ import { theme } from "./src/theme/theme"
 import { useAuth } from "./src/context/AuthContext"
 import { useEffect } from "react"
 import * as NavigationBar from "expo-navigation-bar"
+import { SafeAreaView } from "react-native-safe-area-context"
 
 const Stack = createStackNavigator()
 
 function AppContent() {
   const { user, loading } = useAuth()
 
-  // useEffect(() => {
-  //   const hideNavigation = async () => {
-  //     await NavigationBar.setVisibilityAsync("hidden")   // 👈 Hides navigation bar
-  //     await NavigationBar.setBehaviorAsync("overlay-swipe") // Allows swipe up to show temporarily
-  //   }
-
-  //   hideNavigation()
-
-  //   // Optional: Reset visibility when screen unmounts
-  //   // return () => {
-  //   //   NavigationBar.setVisibilityAsync("visible")
-  //   //   NavigationBar.setBehaviorAsync("inset-swipe")
-  //   // }
-  // })
-  
-  useEffect(()=>{
-  },[user])
+  useEffect(() => {
+  }, [user])
 
   if (loading) {
     return <LoadingScreen />
@@ -44,7 +30,7 @@ function AppContent() {
   return (
     <NavigationContainer>
       <StatusBar style="light" backgroundColor={theme.colors.primary} />
-        {user ? <MainNavigator /> : <AuthNavigator />}
+      {user ? <MainNavigator /> : <AuthNavigator />}
       <Toast />
     </NavigationContainer>
   )
@@ -55,7 +41,12 @@ export default function App() {
     <PaperProvider theme={theme}>
       <LoadingProvider>
         <AuthProvider>
-          <AppContent />
+          <SafeAreaView 
+            style={{ flex: 1, backgroundColor: theme.colors.background }}
+            edges={['left', 'right', 'bottom']} // Exclude 'top' to avoid header conflicts
+          >
+            <AppContent />
+          </SafeAreaView>
         </AuthProvider>
       </LoadingProvider>
     </PaperProvider>

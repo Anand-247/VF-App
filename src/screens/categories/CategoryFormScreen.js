@@ -14,7 +14,6 @@ export default function CategoryFormScreen({ navigation, route }) {
   const { category } = route.params || {}
   const isEditing = !!category
   const [imagePickerVisible, setImagePickerVisible] = useState(false)
-  const [selectedImage, setSelectedImage] = useState(null)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -59,27 +58,25 @@ export default function CategoryFormScreen({ navigation, route }) {
     return Object.keys(newErrors).length === 0
   }
 
-  // Image picker with crop options
-  const showImagePicker = () => {
-    Alert.alert(
-      "Select Image",
-      "Choose an option",
-      [
-        { text: "Camera", onPress: () => openCamera() },
-        { text: "Gallery", onPress: () => openGallery() },
-        { text: "Cancel", style: "cancel" }
-      ]
-    )
-  }
-
   const handleImagePick = async (source) => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,        
-        aspect: [3, 4],
-        quality: 0.8,
-      })
+      let result;
+
+      if (source === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
+      }
 
       if (!result.canceled && result.assets[0]) {
         await processImage(result.assets[0])
@@ -87,57 +84,6 @@ export default function CategoryFormScreen({ navigation, route }) {
     } catch (err) {
       console.error("Image pick error", err)
       Toast.show({ type: "error", text1: "Image Error", text2: "Failed to pick image" })
-    }
-  }
-
-
-  const openCamera = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera permission is required!')
-        return
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        await processImage(result.assets[0])
-      }
-    } catch (error) {
-      console.error('Camera error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to capture image",
-      })
-    }
-  }
-
-  const openGallery = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,        
-        aspect: [3, 4],
-        quality: 0.8,
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        await processImage(result.assets[0])
-      }
-    } catch (error) {
-      console.error('Gallery error:', error)
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to select image",
-      })
     }
   }
 

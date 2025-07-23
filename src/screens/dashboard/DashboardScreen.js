@@ -139,6 +139,7 @@ export default function DashboardScreen({ navigation }) {
             onPress={() =>
               navigation.navigate("Products", {
                 screen: "ProductForm",
+                params: { modal: true },
               })
             }
           />
