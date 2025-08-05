@@ -151,7 +151,7 @@ export default function BannerFormScreen({ navigation, route }) {
   const handleImagePick = async (source) => {
   let image = null;
   try {
-    console.log("🚀 ~ handleImagePick ~ source:", source);
+    // console.log("🚀 ~ handleImagePick ~ source:", source);
 
     image = await ImageCropPicker.openPicker({
       width: 800,
@@ -211,7 +211,7 @@ export default function BannerFormScreen({ navigation, route }) {
           onlyScaleDown: true,
         }
       )
-      console.log("🚀 ~ processImage ~ resizedImage:", resizedImage.uri)
+      // console.log("🚀 ~ processImage ~ resizedImage:", resizedImage.uri)
 
       setFormData(prev => ({
         ...prev,

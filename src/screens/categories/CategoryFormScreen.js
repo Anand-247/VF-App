@@ -29,7 +29,7 @@ export default function CategoryFormScreen({ navigation, route }) {
 
   useEffect(() => {
     if (category) {
-      console.log("🚀 ~ CategoryFormScreen ~ category:", category.image)
+      // console.log("🚀 ~ CategoryFormScreen ~ category:", category.image)
       setFormData({
         name: category.name || "",
         description: category.description || "",
@@ -75,7 +75,6 @@ export default function CategoryFormScreen({ navigation, route }) {
             buttonPositive: "OK"
           }
         )
-        console.log("🚀 ~ requestCameraPermission ~ granted:", granted)
         return granted === PermissionsAndroid.RESULTS.GRANTED
       } catch (err) {
         console.warn(err)
@@ -100,7 +99,7 @@ export default function CategoryFormScreen({ navigation, route }) {
   const handleImagePick = async (source) => {
   let image = null;
   try {
-    console.log("🚀 ~ handleImagePick ~ source:", source);
+    // console.log("🚀 ~ handleImagePick ~ source:", source);
 
     // Picking from gallery (you can enable camera later if needed)
     image = await ImageCropPicker.openPicker({
@@ -113,7 +112,7 @@ export default function CategoryFormScreen({ navigation, route }) {
       multiple: false, // single image only
     });
 
-    console.log("🚀 ~ handleImagePick ~ image:", image);
+    // console.log("🚀 ~ handleImagePick ~ image:", image);
 
     const processedImage = {
       uri: image.path,

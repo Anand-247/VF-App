@@ -164,7 +164,7 @@ export default function ProductFormScreen({ navigation, route }) {
   const handleImagePick = async (source) => {
     let image = null
     try {
-      console.log("🚀 ~ handleImagePick ~ source:", source)
+      // console.log("🚀 ~ handleImagePick ~ source:", source)
       // if (source === 'camera') {
       //   image = await ImageCropPicker.openCamera({
       //     width: 800,
